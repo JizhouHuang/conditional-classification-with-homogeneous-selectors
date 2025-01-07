@@ -76,17 +76,23 @@ def robust_list_learning_of_sparse_linear_classifiers(file_path, num_samples, sp
         2
     ).reshape(-1, sparsity, sparsity)
 
-    label_combinations_with_margin = label_combinations - margin
-
+    # repeat label_combinations to match the shape of labeled_feature_combinations
     # dimension: [(sample_dim choose sparsity) * (sample_size choose sparsity), sparsity, 1]
-    label_combinations_with_margin = label_combinations_with_margin.repeat(feature_indices.shape[0], 1).view(-1, sparsity, 1)
+    label_combinations = label_combinations.repeat(feature_indices.shape[0], 1)
 
-    weight_list = torch.bmm(
-        torch.linalg.inv(labeled_feature_combinations), 
-        label_combinations_with_margin
-    )
+    # solve the linear system specified in Algorithm 4 in Appendix A
+    weight_list = torch.linalg.solve(labeled_feature_combinations, label_combinations - margin)
 
-    return weight_list.squeeze(2)
+    # # dimension: [(sample_dim choose sparsity) * (sample_size choose sparsity), sparsity, 1]
+    # label_combinations_with_margin = label_combinations_with_margin.repeat(feature_indices.shape[0], 1).view(-1, sparsity, 1)
+
+    # weight_list = torch.bmm(
+    #     torch.linalg.inv(labeled_feature_combinations), 
+    #     label_combinations_with_margin
+    # )
+
+    # return weight_list.squeeze(2)
+    return weight_list
 
 # checker function
 def robust_list_learning_of_sparse_linear_classifiers_checker(file_path, num_samples, sparsity, margin, test_distr=None):
@@ -153,15 +159,17 @@ def robust_list_learning_of_sparse_linear_classifiers_checker(file_path, num_sam
     return weight_list
 
 # Test the function
-num_samples = 1000
+num_samples = 128
 sparsity = 3
-margin = 0.12
-fake_distr = fake_data(num_samples, 5)
+margin = 0.00238678712
+fake_distr = fake_data(num_samples, 4)
 weight_list = robust_list_learning_of_sparse_linear_classifiers(None, num_samples, sparsity, margin, test_distr=fake_distr)
-print(weight_list.shape)
+weight_list_abs_sum = torch.abs(weight_list.sum())
+print(weight_list.shape, weight_list_abs_sum)
 
-# weight_list_base = robust_list_learning_of_sparse_linear_classifiers_checker(None, num_samples, sparsity, margin, test_distr=fake_distr)
-# print(weight_list_base.shape)
+weight_list_base = robust_list_learning_of_sparse_linear_classifiers_checker(None, num_samples, sparsity, margin, test_distr=fake_distr)
+weight_list_base_abs_sum = torch.abs(weight_list_base.sum())
+print(weight_list_base.shape, weight_list_base_abs_sum)
 
-# diff = torch.abs(weight_list - weight_list_base).sum()
-# print(diff)
+diff = torch.abs(weight_list - weight_list_base).sum()
+print(diff)
