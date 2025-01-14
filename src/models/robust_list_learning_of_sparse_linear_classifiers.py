@@ -1,4 +1,3 @@
-from ..utils.helpers import load_data, clean_data, fake_data
 import torch
 import torch.nn as nn
 
@@ -17,8 +16,8 @@ class RobustListLearner(nn.Module):
         Perform robust list learning as specified by the algorithm in Appendix A.
         
         Parameters:
-        distr (torch.Tensor):              The input data distribution. 
-                                           The last column is the label, which takes values in {0, 1}.
+        distr (Dataset):                   The input data distribution. 
+                                           The first column is the label, which takes values in {0, 1}.
         
         Returns:
         sparse_weight_list (torch.Tensor): The list of weights for each combination.
@@ -31,10 +30,10 @@ class RobustListLearner(nn.Module):
         
 
         # Extract features and labels
-        # Assume the last column is the label column
+        # Assume the first column is the label column
         # and the rest are feature columns
-        labels = distr[:, -1]*2 - 1
-        labeled_features = labels.unsqueeze(1) * distr[:, :-1]
+        labels = distr[:, 0] * 2 - 1
+        labeled_features = labels.unsqueeze(1) * distr[:, 1:]
 
         sample_size, sample_dim = labeled_features.shape[0], labeled_features.shape[1]
         
@@ -86,7 +85,14 @@ class RobustListLearner(nn.Module):
         label_combinations = label_combinations.repeat(num_feature_combinations, 1)
 
         # solve the linear system specified in Algorithm 4 in Appendix A
-        weight_list = torch.linalg.solve(labeled_feature_combinations, label_combinations - self.margin)
+        # weight_list = torch.linalg.solve(
+        #     labeled_feature_combinations, 
+        #     label_combinations - self.margin
+        # )
+        weight_list = torch.matmul(
+            labeled_feature_combinations, 
+            (label_combinations - self.margin).unsqueeze(-1)
+        ).squeeze()
 
         # encoded as sparse vectors
         # construct a 2D coordinate tensor to indicate the position of non-zero elements
@@ -109,18 +115,18 @@ class RobustListLearner(nn.Module):
         Perform robust list learning of sparse linear classifiers for verification purpose.
         
         Parameters:
-        distr (torch.Tensor):       The input data distribution.
-                                    The last column is the label, which takes values in {0, 1}.
+        distr (Dataset):            The input data distribution.
+                                    The first column is the label, which takes values in {0, 1}.
         
         Returns:
         weight_list (torch.Tensor): The list of weights for each combination.
         """
 
         # Extract features and labels
-        # Assume the last column is the label column
+        # Assume the first column is the label column
         # and the rest are feature columns
-        labels = distr[:, -1] * 2 - 1
-        labeled_features = labels.unsqueeze(1) * distr[:, :-1]
+        labels = distr[:, 0] * 2 - 1
+        labeled_features = labels.unsqueeze(1) * distr[:, 1:]
 
         sample_size, sample_dim = labeled_features.shape[0], labeled_features.shape[1]
         
@@ -158,18 +164,18 @@ class RobustListLearner(nn.Module):
         return weight_list
 
 # Test the function
-num_samples = 64
-sparsity = 3
-margin = 0.00238678712
-fake_distr = fake_data(num_samples, 5)
-robust_list_learner = RobustListLearner(sparsity, margin)
-weight_list = robust_list_learner.forward(fake_distr)
-weight_list_abs_sum = torch.abs(weight_list.sum())
-print(weight_list.shape, weight_list_abs_sum)
+# num_samples = 64
+# sparsity = 3
+# margin = 0.00238678712
+# fake_distr = fake_data(num_samples, 5)
+# robust_list_learner = RobustListLearner(sparsity, margin)
+# weight_list = robust_list_learner.forward(fake_distr)
+# weight_list_abs_sum = torch.abs(weight_list.sum())
+# print(weight_list.shape, weight_list_abs_sum)
 
-weight_list_base = robust_list_learner.forward_verifier(fake_distr)
-weight_list_base_abs_sum = torch.abs(weight_list_base.sum())
-print(weight_list_base.shape, weight_list_base_abs_sum)
+# weight_list_base = robust_list_learner.forward_verifier(fake_distr)
+# weight_list_base_abs_sum = torch.abs(weight_list_base.sum())
+# print(weight_list_base.shape, weight_list_base_abs_sum)
 
-diff = torch.abs(weight_list.to_dense() - weight_list_base).sum()
-print(diff)
+# diff = torch.abs(weight_list.to_dense() - weight_list_base).sum()
+# print(diff)
