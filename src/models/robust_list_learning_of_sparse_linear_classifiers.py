@@ -1,22 +1,26 @@
 import torch
 import torch.nn as nn
+import math
 from ..utils.helpers import TransformedDataset
+from tqdm import tqdm
 
 class RobustListLearner(nn.Module):
     def __init__(
             self, 
+            prev_header: str,
             sparsity: int, 
             margin: float,
-            num_slices: int
+            num_cluster: int
     ):
         """
         sparsity (int):           The degree for each combination.
         margin (int):             The margin to use for the robust list learning.
         """
         super(RobustListLearner, self).__init__()
+        self.header = " ".join([prev_header, "robust list learner", "-"])
         self.sparsity = sparsity
         self.margin = margin
-        self.num_slices = num_slices
+        self.num_cluster = num_cluster
 
     def forward(
             self, 
@@ -43,30 +47,31 @@ class RobustListLearner(nn.Module):
         # Assume the first column is the label column
         # Map the labels from {0, 1} to {-1, +1}
         labels, features = dataset[:]
-        print(f"robust list learner - is labels on CUDA? {labels.is_cuda}")
+        print(f"{self.header} selecting sub-matrices from data of all combinations ...")
         labeled_features = labels.unsqueeze(1) * features
 
         sample_size, self.sample_dim = labeled_features.shape[0], labeled_features.shape[1]
         
         # Generate row indices of all possible combinations of samples
+        # print(f"{self.header} computing combinations of sample indices ...")
         sample_indices = torch.combinations(
             torch.arange(sample_size), 
             self.sparsity
         ).to(labels.device)   # [sample_size choose sparsity, sparsity]
         
         self.num_sample_combinations = sample_indices.shape[0]
-        print(f"robust list learner - is sample indices on CUDA? {sample_indices.is_cuda}")
 
         # Generate column indices of all possible combinations of features
+        # print(f"{self.header} computing combinations of feature indices ...")
         feature_indices = torch.combinations(
             torch.arange(self.sample_dim), 
             self.sparsity
         ).to(labels.device)   # [sample_dim choose sparsity, sparsity]
         
         self.num_feature_combinations = feature_indices.shape[0]
-        print(f"robust list learner - is feature indices on CUDA? {feature_indices.is_cuda}")
 
         # Select the labels for the generated sample combinations
+        # print(f"{self.header} selecting labels for different sample combinations ...")
         label_combinations = torch.index_select(
             labels,
             0,
@@ -74,6 +79,7 @@ class RobustListLearner(nn.Module):
         ).reshape(-1, self.sparsity)    # [sample_size choose sparsity, sparsity]
 
         # Select the rows for the generated sample combinations while remaining flattened
+        # print(f"{self.header} selecting labeled features for different sample combinations ...")
         labeled_feature_combinations = torch.index_select(
             labeled_features,
             0,
@@ -81,6 +87,7 @@ class RobustListLearner(nn.Module):
         )   # [sample_size choose sparsity * sparsity, sample_dim]
 
         # Select the columns for the generated feature combinations from the flattened labeled_feature_combinations
+        # print(f"{self.header} selecting and reshaping previously resulting labeled features for different feature combinations ...")
         labeled_feature_combinations = torch.t(
             torch.index_select(
             labeled_feature_combinations,
@@ -92,7 +99,7 @@ class RobustListLearner(nn.Module):
             self.sparsity, 
             self.num_sample_combinations * self.sparsity
         )   # [sample_dim choose sparsity, sparsity, (sample_size choose sparsity) * sparsity]
-
+        # print(f"{self.header} reshaping the resulting labeled features ...")
         labeled_feature_combinations = torch.transpose(
             labeled_feature_combinations, 
             1, 
@@ -104,6 +111,7 @@ class RobustListLearner(nn.Module):
         ) # [(sample_dim choose sparsity) * (sample_size choose sparsity), sparsity, sparsity]
 
         # repeat label_combinations to match the shape of labeled_feature_combinations
+        # print(f"{self.header} repeating label combinations to match the shape of labeled features ...")
         label_combinations = label_combinations.repeat(
             self.num_feature_combinations, 
             1
@@ -114,9 +122,16 @@ class RobustListLearner(nn.Module):
         #     labeled_feature_combinations, 
         #     label_combinations - self.margin
         # )
+        # print(f"{self.header} solving the linear system for least square solution ...")
+        # weight_list = torch.linalg.lstsq(
+        #     labeled_feature_combinations, 
+        #     label_combinations - self.margin,
+        #     rcond=1e-5
+        # )    # [(sample_dim choose sparsity) * (sample_size choose sparsity), sparsity]
+        print(f"{self.header} solving the linear system using pseudo-inverse...")
         weight_list = torch.matmul(
-            torch.linalg.pinv(labeled_feature_combinations), 
-            (label_combinations - self.margin).unsqueeze(-1)
+            torch.linalg.pinv(labeled_feature_combinations),    # [(sample_dim choose sparsity) * (sample_size choose sparsity), sparsity, sparsity]
+            (label_combinations - self.margin).unsqueeze(-1)    # [(sample_dim choose sparsity) * (sample_size choose sparsity), sparsity, 1]
         ).squeeze() # [(sample_dim choose sparsity) * (sample_size choose sparsity), sparsity]
 
         # batch method
@@ -138,15 +153,18 @@ class RobustListLearner(nn.Module):
             dim=0
         )   # [(sample_dim choose sparsity) * (sample_size choose sparsity), sparsity]
 
-        batch_size = col_indices.shape[0] // self.num_slices
+        batch_size = col_indices.shape[0] // self.num_cluster
 
         row_indices = torch.arange(
             batch_size
         ).repeat_interleave(self.sparsity).to(col_indices.device)
-
+        # add progress bar to sparse encoding process
+        progress_bar = tqdm(
+            total=math.ceil(col_indices.shape[0] / batch_size),
+            desc=f"{self.header} encoding sparse classifiers"
+        )
         list_of_sparse_tensors = []
-        for i in range(self.num_slices):
-            print(f"robust list learner - computing the {i + 1}th cluster ...")
+        for i in range(self.num_cluster):
             list_of_sparse_tensors.append(
                 self.to_sparse_tensor(
                     row_indices=row_indices,
@@ -154,8 +172,8 @@ class RobustListLearner(nn.Module):
                     weight_slice=weights[i * batch_size : (i + 1) * batch_size]
                 )
             )
+            progress_bar.update(1)
         if (i + 1) * batch_size < col_indices.shape[0]:
-            print(f"robust list learner - computing the {i + 2}th cluster ...")
             row_indices = torch.arange(
                 col_indices.shape[0] - (i + 1) * batch_size
             ).repeat_interleave(self.sparsity).to(col_indices.device)
@@ -167,6 +185,9 @@ class RobustListLearner(nn.Module):
                     weight_slice=weights[(i + 1) * batch_size:]
                 )
             )
+            progress_bar.update(1)
+        progress_bar.close()
+
         return list_of_sparse_tensors
 
     def to_sparse_tensor(
