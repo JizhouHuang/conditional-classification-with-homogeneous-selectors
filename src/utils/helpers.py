@@ -10,6 +10,8 @@ class UCIMedicalDataset:
             attributes: List[str], 
             categorical_attr: List[str], 
             label_name: str = "Class", 
+            label_true: int = 1,
+            label_false: int = 0,
             na_values: str = "?",
             device: torch.device=torch.device('cpu')
         ) -> torch.Tensor:
@@ -49,7 +51,7 @@ class UCIMedicalDataset:
         )
 
         # Map labels to {0, 1}
-        data[label_name] = data[label_name].map({1: 0, 2: 1})
+        data[label_name] = data[label_name].map({label_false: 0, label_true: 1})
 
         # Center and normalize the features (excluding the label column)
         col_to_normalize = [col for col in data.columns if col != label_name]

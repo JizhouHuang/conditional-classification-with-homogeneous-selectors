@@ -6,6 +6,9 @@ from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 
 class SelectorPerceptron(nn.Module):
+    """
+    Conditional Classification of Homogeneous Halfspaces using Projected Stochastic Gradient Descent.
+    """
     def __init__(
             self, 
             prev_header: str,
@@ -81,7 +84,7 @@ class SelectorPerceptron(nn.Module):
         )
 
         init_weight = init_weight.repeat(self.cluster_size, 1)   # [cluster_size, dim_sample]
-        self.projected_SGD_alt(
+        self.projected_SGD(
             dataloader_train=dataloader_train,
             dataloader_val=dataloader_val,
             weight_w=torch.stack([init_weight, -init_weight])    # [2, cluster_size, dim_sample]
@@ -96,7 +99,7 @@ class SelectorPerceptron(nn.Module):
 
         return self.selector_list
     
-    def projected_SGD_alt(
+    def projected_SGD(
             self, 
             dataloader_train: DataLoader, 
             dataloader_val: DataLoader,

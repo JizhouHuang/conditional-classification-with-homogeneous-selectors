@@ -5,6 +5,9 @@ from ..utils.helpers import TransformedDataset
 from tqdm import tqdm
 
 class RobustListLearner(nn.Module):
+    """
+    Robust List Classification for Sparse Classes
+    """
     def __init__(
             self, 
             prev_header: str,
@@ -161,7 +164,8 @@ class RobustListLearner(nn.Module):
         # add progress bar to sparse encoding process
         progress_bar = tqdm(
             total=math.ceil(col_indices.shape[0] / batch_size),
-            desc=f"{self.header} encoding sparse classifiers"
+            desc=f"{self.header} encoding sparse classifiers",
+            # leave=False
         )
         list_of_sparse_tensors = []
         for i in range(self.num_cluster):

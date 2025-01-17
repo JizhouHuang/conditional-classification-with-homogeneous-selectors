@@ -4,9 +4,12 @@ from torch.utils.data import random_split
 from tqdm import tqdm
 from typing import List, Tuple
 from ..utils.helpers import Classify, TransformedDataset
-from ..models.projected_stochastic_gradient_descent import SelectorPerceptron
+from .projected_sgd import SelectorPerceptron
 
 class ConditionalLearnerForFiniteClass(nn.Module):
+    """
+    Conditional Classification for Any Finite Classes
+    """
     def __init__(
             self, 
             prev_header: str,
@@ -87,8 +90,9 @@ class ConditionalLearnerForFiniteClass(nn.Module):
         for i, classifiers in enumerate(
             tqdm(
                 sparse_classifier_clusters, 
-                total=num_cluster, 
-                desc=self.header
+                # total=num_cluster, 
+                desc=self.header,
+                # leave=False
             )
         ):
             dataset = TransformedDataset(data, classifiers)

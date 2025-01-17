@@ -1,13 +1,13 @@
 import torch
 import torch.nn as nn
 import yaml
-from typing import Callable, Union, Tuple
+from typing import Callable, Union, Tuple, List
 from tqdm import tqdm
 from tabulate import tabulate
 from torch.utils.data import DataLoader
 from ..utils.helpers import Classify, SparseClassify, TransformedDataset
-from ..models.conditional_classification_finite_class import ConditionalLearnerForFiniteClass
-from ..models.robust_list_learning_of_sparse_linear_classifiers import RobustListLearner
+from ..models.conditional_learner import ConditionalLearnerForFiniteClass
+from ..models.robust_list_learner import RobustListLearner
 
 class ExperimentCCSC(nn.Module):
     """
@@ -15,6 +15,7 @@ class ExperimentCCSC(nn.Module):
     """
     def __init__(
             self,
+            prev_header: str,
             experiment_id: int,
             config_file_path: str
     ):
@@ -37,7 +38,7 @@ class ExperimentCCSC(nn.Module):
         batch_size:         Number of example to estimate the expectation of projected gradient in each gradient step.
         """
         super(ExperimentCCSC, self).__init__()
-        self.header = " ".join(["experiment", str(experiment_id), "-"])
+        self.header = " ".join([prev_header, "experiment", str(experiment_id), "-"])
 
         # Read the YAML configuration file
         with open(config_file_path, 'r') as file:
@@ -57,7 +58,15 @@ class ExperimentCCSC(nn.Module):
             self,
             data_train: torch.Tensor,
             data_test: torch.Tensor
-    ) -> None:
+    ) -> List[
+        Tuple[
+            torch.Tensor, 
+            Union[
+                torch.float, 
+                Tuple[torch.float, torch.float]
+            ]
+        ]
+    ]:
         """
         Call Robust List Learner to generate a list of sparse classifiers and input them to the Conditional Learner.
 
@@ -118,7 +127,7 @@ class ExperimentCCSC(nn.Module):
         for classifiers in tqdm(
             sparse_classifier_clusters, 
             total=len(sparse_classifier_clusters), 
-            desc=f"{self.header} - find EEM"
+            desc=f"{self.header} find EEM"
         ):
             error_rates, _, _ = self.error_rate_est(
                 data_test=data_test,
@@ -130,11 +139,6 @@ class ExperimentCCSC(nn.Module):
                 min_error = error_rate
                 eem_classifier = classifiers[index].to_dense()
         
-        # Print the best classifiers and selectors
-        print(" ".join([self.header, "best classifier w/o selector is:", "\n", str(eem_classifier)]))
-        print(" ".join([self.header, "best classifier with selector is:", "\n", str(classifier)]))
-        print(" ".join([self.header, "best selector is:", "\n", str(selector)]))
-        
         # Estimate error measures
         errorwo, error, coverage = self.error_rate_est(
             data_test=data_test, 
@@ -142,13 +146,23 @@ class ExperimentCCSC(nn.Module):
             classifier=classifier, 
             selector=selector
         )
+
+        res = [
+            (eem_classifier, min_error),
+            (classifier, errorwo),
+            (torch.stack([classifier, selector]), (error, coverage))
+        ]
         
         # Print the results in a table format
         table = [
-            ["Sample Size", "Sample Dimension", "Data Device", "Min ER w/o Selector", "Min ER with Selector","ER w/o Selector", "Coverage"],
-            [data_test.shape[0], data_test.shape[1] - 1, data_test.device, min_error, error, errorwo, coverage]
+            ["Classifier Type", "Test Sample Size", "Data Device", "Est Error Rate", "Coverage"],
+            ["Classic Sparse", data_test.shape[0], data_test.device, min_error, 1],
+            ["Conditional Sparse w/o Selector", data_test.shape[0], data_test.device, errorwo, 1],
+            ["Conditional Sparse", data_test.shape[0], data_test.device, error, coverage]
         ]
         print(tabulate(table, headers="firstrow", tablefmt="grid"))
+
+        return res
 
     def error_rate_est(
             self,

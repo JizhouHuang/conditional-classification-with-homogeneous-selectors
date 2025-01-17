@@ -1,0 +1,27 @@
+data_file_path: "src/datasets/hepatitis.data"  # Replace with your file path
+config_file_path: 'src/config/model.yaml'
+attribute_names:
+  - "Class"  # Target (DIE=1, LIVE=2)
+  - "Age"
+  - "Sex"
+  - "Steroid"
+  - "Antivirals"
+  - "Fatigue"
+  - "Malaise"
+  - "Anorexia"
+  - "Liver Big"
+  - "Liver Firm"
+  - "Spleen Palpable"
+  - "Spiders"
+  - "Ascites"
+  - "Varices"
+  - "Bilirubin"
+  - "Alk Phosphate"
+  - "SGOT"
+  - "Albumin"
+  - "Protime"
+  - "Histology"
+categorical_attr_names:
+  - "Sex"
+label_true: 2
+label_false: 1
