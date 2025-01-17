@@ -18,6 +18,9 @@ class ConditionalLearnerForFiniteClass(nn.Module):
     ):
         """
         Initialize the conditional learner for finite class classification.
+        Compute the learning rate of PSGD for the given lr coefficient using
+        the formula:
+            beta = O(sqrt(1/num_iter * dim_sample)).
 
         Parameters:
         dim_sample (int):             The dimension of the sample features.
@@ -47,8 +50,16 @@ class ConditionalLearnerForFiniteClass(nn.Module):
             sparse_classifier_clusters: List[torch.sparse.FloatTensor]
     ) -> torch.Tensor:
         """
-        Perform conditional learning for finite class classification.
+        Call PSGD optimizer for each cluster of sparse classifiers using all the data given.
+        
+        Note that the PSGD optimizer runs in parallel for all the sparse classifiers in a 
+        cluster. PSGD optimizer will return one selector for each sparse classifier of each 
+        cluster.
 
+        For each cluster, we evaluate the best classifier-selector pair using all the data given
+        due to insufficient data size.
+
+        At last, we use the same data set to find the best classifier-selector pair across cluster.
 
         Parameters:
         sparse_classifier_clusters (List[torch.sparse.FloatTensor]): The list of sparse classifiers.
@@ -120,6 +131,20 @@ class ConditionalLearnerForFiniteClass(nn.Module):
             classifiers: torch.Tensor,
             selectors: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Evaluate the classifiers and selectors on the given evaluation dataset.
+
+        This function computes the conditional error rates for all the classifier-selector pairs in
+        a cluster and returns the pair with the minimum error rate.
+
+        Parameters:
+        eval_dataset (TransformedDataset): The dataset to evaluate the classifiers and selectors.
+        classifiers (torch.Tensor): The tensor containing classifier weights.
+        selectors (torch.Tensor): The tensor containing selector weights.
+
+        Returns:
+        Tuple[torch.Tensor, torch.Tensor]: The classifier and selector with the minimum error rate.
+        """
         labels, features = eval_dataset[:]
 
         errors = (
