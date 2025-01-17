@@ -1,8 +1,8 @@
-data_frac_rll: 0.1
+data_frac_rll: 0.2
 margin: 0.001
 sparsity: 3
 num_cluster: 4
 data_frac_psgd: 0.5
-lr_coeff: 10.0
+lr_coeff: 5.0
 num_iter: 256
 batch_size: 32

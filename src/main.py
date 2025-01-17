@@ -16,6 +16,7 @@ def main():
         config = yaml.safe_load(file)
 
     # Extract configuration values
+    data_frac = config['data_frac']
     data_file_path = config['data_file_path']
     config_file_path = config['config_file_path']
     attribute_names = config['attribute_names']
@@ -47,7 +48,7 @@ def main():
             label_false=label_false,
             device=device
         )
-        data_train, data_test = uci_data.slice_with_ratio(0.8)
+        data_train, data_test = uci_data.slice_with_ratio(data_frac)
 
         # Run the experiment
         res = experiment(data_train, data_test)
