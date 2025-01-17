@@ -158,7 +158,7 @@ class SelectorPerceptron(nn.Module):
                 dataset=dataset_val,
                 weight_w=weight_w
             )
-            torch.cuda.synchronize()
+            # torch.cuda.synchronize()
 
     def update_weight(
             self,

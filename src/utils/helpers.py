@@ -64,7 +64,7 @@ class UCIMedicalDataset:
         # store as tensor
         self.data = torch.tensor(data.values, dtype=torch.float32).to(device)
 
-    def SliceDataWithRatio(
+    def slice_with_ratio(
             self,
             ratio: float
     ) -> Tuple[torch.Tensor, torch.Tensor]:

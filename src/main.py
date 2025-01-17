@@ -12,7 +12,7 @@ def main():
     print(f"Using device: {device}")
 
     # Load the configuration from the YAML file
-    with open('src/config/hepatitis.yaml', 'r') as file:
+    with open('src/config/data/hepatitis.yaml', 'r') as file:
         config = yaml.safe_load(file)
 
     # Extract configuration values
@@ -47,7 +47,7 @@ def main():
             label_false=label_false,
             device=device
         )
-        data_train, data_test = uci_data.SliceDataWithRatio(0.8)
+        data_train, data_test = uci_data.slice_with_ratio(0.8)
 
         # Run the experiment
         res = experiment(data_train, data_test)
