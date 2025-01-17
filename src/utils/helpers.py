@@ -98,6 +98,9 @@ class TransformedDataset(Dataset):
         ):
         """
         Initialize the dataset with a label mapping.
+        Note that the transform will generate cluster_size {0, 1} labels for each example.
+        A label of "1" indicates the corresponding sparse classifier disagrees with the 
+        true original data label.
 
         Parameters:
         data (torch.Tensor):      The input data.
