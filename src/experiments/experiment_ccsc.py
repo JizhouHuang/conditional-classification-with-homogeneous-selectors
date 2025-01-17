@@ -36,7 +36,7 @@ class ExperimentCCSC(nn.Module):
         num_iter:           The number of iteration for PSGD to run.
         batch_size:         Number of example to estimate the expectation of projected gradient in each gradient step.
         """
-        super(Experiment, self).__init__()
+        super(ExperimentCCSC, self).__init__()
         self.header = " ".join(["experiment", str(experiment_id), "-"])
 
         # Read the YAML configuration file
