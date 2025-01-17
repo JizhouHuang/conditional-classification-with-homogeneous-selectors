@@ -1,5 +1,5 @@
 import torch
-from .experiments.experiment import Experiment
+from .experiments.experiment_ccsc import ExperimentCCSC
 from .utils.helpers import UCIMedicalDataset
 
 def main():
@@ -12,7 +12,7 @@ def main():
     config_file_path = 'src/config/models.yaml'
 
     # Initialize the experiment
-    experiment = Experiment(
+    experiment = ExperimentCCSC(
         experiment_id=experiment_id, 
         config_file_path=config_file_path
     ).to(device)

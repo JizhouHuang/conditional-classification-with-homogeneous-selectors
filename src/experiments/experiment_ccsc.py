@@ -9,19 +9,41 @@ from ..utils.helpers import Classify, SparseClassify, TransformedDataset
 from ..models.conditional_classification_finite_class import ConditionalLearnerForFiniteClass
 from ..models.robust_list_learning_of_sparse_linear_classifiers import RobustListLearner
 
-class Experiment(nn.Module):
+class ExperimentCCSC(nn.Module):
+    """
+    Experiment of Conditional Classification for Sparse Classes.
+    """
     def __init__(
             self,
             experiment_id: int,
-            config_file_path:str
+            config_file_path: str
     ):
+        """
+        Initialize through reading parameters from YAML file located under src/config/.
+
+        Parameters:
+        experiment_id (int): The ID of the experiment.
+        config_file_path (str): The path to the configuration file.
+
+        Explanations:
+        data_frac_rll:      Fraction of training data used for Robust List Learning.
+        margin:             According to Appendix A, the RHS of the linear system is formed by labels subtracted by the margin.
+        sparsity:           Number of non-zero dimensions for the resulting sparse representations.
+        num_cluster:        To speed up the computation, instead of iterating only one classifier at a time, 
+                            we partition all the sparse classifiers into multiple clusters and run PSGD on a cluster in each iteration.
+        data_frac_psgd:     Fraction of training data used for the updating stage of Projected SGD.
+        lr_coeff:           A constant to scale the learning rate (beta) of PSGD.
+        num_iter:           The number of iteration for PSGD to run.
+        batch_size:         Number of example to estimate the expectation of projected gradient in each gradient step.
+        """
         super(Experiment, self).__init__()
         self.header = " ".join(["experiment", str(experiment_id), "-"])
 
-        # read yaml file from config_file_path   
+        # Read the YAML configuration file
         with open(config_file_path, 'r') as file:
             config = yaml.safe_load(file)
         
+        # Load configuration values
         self.data_frac_rll = config['data_frac_rll']
         self.margin = config['margin']
         self.sparsity = config['sparsity']
@@ -36,6 +58,14 @@ class Experiment(nn.Module):
             data_train: torch.Tensor,
             data_test: torch.Tensor
     ) -> None:
+        """
+        Call Robust List Learner to generate a list of sparse classifiers and input them to the Conditional Learner.
+
+        Parameters:
+        data_train:     Training data for both Robust List Learning and Conditional Learning.
+        data_test:      Testing data to estimate the error measures of the final classifier-selector pair.
+                        Disjoint from data_train.
+        """
         # Learn the sparse classifiers
         print(" ".join([self.header, "initializing robust list learner for sparse perceptrons ..."]))
         robust_list_learner = RobustListLearner(
@@ -58,7 +88,7 @@ class Experiment(nn.Module):
 
         sparse_classifier_clusters = robust_list_learner(
             next(iter(rl_dataloader))
-        )
+        )   # List[torch.sparse.FloatTensor]
 
         # Perform conditional learning
         print(" ".join([self.header, "initializing conditional classification learner for homogeneous halfspaces ..."]))
@@ -81,7 +111,7 @@ class Experiment(nn.Module):
         classifier, selector = conditional_learner(
             data=data_train,
             sparse_classifier_clusters=sparse_classifier_clusters
-        )
+        )   # Tuple[torch.Tensor, torch.Tensor]
 
         print(" ".join([self.header, "finding empirical error minimizer from sparse perceptrons ..."]))
         eem_classifier, min_error = None, 1
@@ -100,15 +130,20 @@ class Experiment(nn.Module):
                 min_error = error_rate
                 eem_classifier = classifiers[index].to_dense()
         
-        print(" ".join([self.header, "best classifier w/o selector is:", "\n",str(eem_classifier)]))
+        # Print the best classifiers and selectors
+        print(" ".join([self.header, "best classifier w/o selector is:", "\n", str(eem_classifier)]))
         print(" ".join([self.header, "best classifier with selector is:", "\n", str(classifier)]))
         print(" ".join([self.header, "best selector is:", "\n", str(selector)]))
+        
+        # Estimate error measures
         errorwo, error, coverage = self.error_rate_est(
             data_test=data_test, 
             predict=Classify, 
             classifier=classifier, 
             selector=selector
         )
+        
+        # Print the results in a table format
         table = [
             ["Sample Size", "Sample Dimension", "Data Device", "Min ER w/o Selector", "Min ER with Selector","ER w/o Selector", "Coverage"],
             [data_test.shape[0], data_test.shape[1] - 1, data_test.device, min_error, error, errorwo, coverage]
@@ -122,6 +157,20 @@ class Experiment(nn.Module):
             classifier: Union[torch.Tensor, torch.sparse.FloatTensor],
             selector: torch.Tensor = None
     ) -> Tuple[torch.float, torch.float, torch.float]:
+        """
+        Estimating the classification error rate, conditional classification error rate, coverage.
+        If no selector given, conditional classification ER will be the same as classification ER,
+        and coverage will be 1.
+
+        Parameters:
+        data_test (torch.Tensor): The test data.
+        predict (Callable): The prediction function.
+        classifier (Union[torch.Tensor, torch.sparse.FloatTensor]): The classifier.
+        selector (torch.Tensor, optional): The selector. Defaults to None.
+
+        Returns:
+        Tuple[torch.float, torch.float, torch.float]: The error rates and coverage.
+        """
         dataset_test = TransformedDataset(data_test)
         labels, features = dataset_test[:]
 
