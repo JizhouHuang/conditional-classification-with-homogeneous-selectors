@@ -5,7 +5,7 @@ from typing import Callable, Union, Tuple, List
 from tqdm import tqdm
 from tabulate import tabulate
 from torch.utils.data import DataLoader
-from ..utils.helpers import Classify, SparseClassify, TransformedDataset
+from ..utils.helpers import Classify, SparseClassify, TransformedDataset, UCIMedicalDataset
 from ..models.conditional_learner import ConditionalLearnerForFiniteClass
 from ..models.robust_list_learner import RobustListLearner
 
@@ -30,7 +30,7 @@ class ExperimentCCSC(nn.Module):
         num_sample_rll:     Number of training data used for Robust List Learning.
         margin:             According to Appendix A, the RHS of the linear system is formed by labels subtracted by the margin.
         sparsity:           Number of non-zero dimensions for the resulting sparse representations.
-        num_cluster:        To speed up the computation, instead of iterating only one classifier at a time, 
+        cluster_size:       To speed up the computation, instead of iterating only one classifier at a time, 
                             we partition all the sparse classifiers into multiple clusters and run PSGD on a cluster in each iteration.
         data_frac_psgd:     Fraction of training data used for the updating stage of Projected SGD.
         lr_coeff:           A constant to scale the learning rate (beta) of PSGD.
@@ -45,10 +45,11 @@ class ExperimentCCSC(nn.Module):
             config = yaml.safe_load(file)
         
         # Load configuration values
+        self.data_frac = config['data_frac']
         self.num_sample_rll = config['num_sample_rll']
         self.margin = config['margin']
         self.sparsity = config['sparsity']
-        self.num_cluster = config['num_cluster']
+        self.cluster_size = config['cluster_size']
         self.data_frac_psgd = config['data_frac_psgd']
         self.lr_coeff = config['lr_coeff']
         self.num_iter = config['num_iter']
@@ -56,8 +57,7 @@ class ExperimentCCSC(nn.Module):
 
     def forward(
             self,
-            data_train: torch.Tensor,
-            data_test: torch.Tensor
+            data: UCIMedicalDataset
     ) -> List[
         Tuple[
             torch.Tensor, 
@@ -77,26 +77,36 @@ class ExperimentCCSC(nn.Module):
         """
         # Learn the sparse classifiers
         print(" ".join([self.header, "initializing robust list learner for sparse perceptrons ..."]))
+        data_train, data_test = data.slice_with_ratio(self.data_frac)
+        
         robust_list_learner = RobustListLearner(
             prev_header=self.header + ">",
             sparsity=self.sparsity, 
             margin=self.margin,
-            num_cluster=self.num_cluster
+            cluster_size=self.cluster_size
         ).to(data_train.device)
 
         rl_dataloader = DataLoader(
             TransformedDataset(data_train),
             batch_size=self.num_sample_rll
         )
-        table = [
-            ["Algorithm", "Sample Size", "Sample Dimension", "Data Device", "Sparsity", "Margin", "Max Clusters"],
-            ["Robust List Learning", self.num_sample_rll, data_train.shape[1] - 1, data_train.device, self.sparsity, self.margin, self.num_cluster + 1]
-        ]
-        print(tabulate(table, headers="firstrow", tablefmt="grid"))
 
         sparse_classifier_clusters = robust_list_learner(
-            next(iter(rl_dataloader))
+            next(
+                iter(
+                    DataLoader(
+                        TransformedDataset(data_train),
+                        batch_size=self.num_sample_rll
+                    )
+                )
+            )
         )   # List[torch.sparse.FloatTensor]
+
+        table = [
+            ["Algorithm", "Sample Size", "Sample Dimension", "Data Device", "Sparsity", "Margin", "Cluster Size", "Max Clusters"],
+            ["Robust List Learning", min(self.num_sample_rll, data_train.size(0)), data_train.shape[1] - 1, data_train.device, min(data_train.shape[1] - 1, self.sparsity), self.margin, sparse_classifier_clusters[0].size(0), len(sparse_classifier_clusters)]
+        ]
+        print(tabulate(table, headers="firstrow", tablefmt="grid"))
 
         # Perform conditional learning
         print(" ".join([self.header, "initializing conditional classification learner for homogeneous halfspaces ..."]))

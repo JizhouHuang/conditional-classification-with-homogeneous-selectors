@@ -13,7 +13,7 @@ class RobustListLearner(nn.Module):
             prev_header: str,
             sparsity: int, 
             margin: float,
-            num_cluster: int
+            cluster_size: int
     ):
         """
         sparsity (int):           The degree for each combination.
@@ -23,7 +23,7 @@ class RobustListLearner(nn.Module):
         self.header = " ".join([prev_header, "robust list learner", "-"])
         self.sparsity = sparsity
         self.margin = margin
-        self.num_cluster = num_cluster
+        self.cluster_size = cluster_size
 
     def forward(
             self, 
@@ -48,8 +48,10 @@ class RobustListLearner(nn.Module):
 
         # Extract features and labels
         # Assume the first column is the label column
-        # Map the labels from {0, 1} to {-1, +1}
         labels, features = dataset[:]
+        # Map the labels from {0, 1} to {-1, +1}
+        labels = 2 * labels - 1
+        
         print(f"{self.header} selecting sub-matrices from data of all combinations ...")
         labeled_features = labels.unsqueeze(1) * features
 
@@ -159,40 +161,38 @@ class RobustListLearner(nn.Module):
             dim=0
         )   # [(sample_dim choose sparsity) * (sample_size choose sparsity), sparsity]
 
-        batch_size = col_indices.shape[0] // self.num_cluster
-
+        # ensure cluster size not exceed the number of sparse classifiers
         row_indices = torch.arange(
-            batch_size
+            min(col_indices.size(0), self.cluster_size)
         ).repeat_interleave(self.sparsity).to(col_indices.device)
+
         # add progress bar to sparse encoding process
         progress_bar = tqdm(
-            total=math.ceil(col_indices.shape[0] / batch_size),
+            total=math.ceil(col_indices.shape[0] / self.cluster_size),
             desc=f"{self.header} encoding sparse classifiers",
             # leave=False
         )
         list_of_sparse_tensors = []
-        for i in range(self.num_cluster):
+        pos = 0
+        while pos < col_indices.size(0) - self.cluster_size:
             list_of_sparse_tensors.append(
                 self.to_sparse_tensor(
                     row_indices=row_indices,
-                    col_indices=col_indices[i * batch_size : (i + 1) * batch_size],
-                    weight_slice=weights[i * batch_size : (i + 1) * batch_size]
+                    col_indices=col_indices[pos : pos + self.cluster_size],
+                    weight_slice=weights[pos : pos + self.cluster_size]
                 )
             )
+            pos += self.cluster_size
             progress_bar.update(1)
-        if (i + 1) * batch_size < col_indices.shape[0]:
-            row_indices = torch.arange(
-                col_indices.shape[0] - (i + 1) * batch_size
-            ).repeat_interleave(self.sparsity).to(col_indices.device)
 
-            list_of_sparse_tensors.append(
-                self.to_sparse_tensor(
-                    row_indices=row_indices,
-                    col_indices=col_indices[(i + 1) * batch_size:],
-                    weight_slice=weights[(i + 1) * batch_size:]
-                )
+        list_of_sparse_tensors.append(
+            self.to_sparse_tensor(
+                row_indices=row_indices[:self.sparsity * (col_indices.size(0) - pos)],
+                col_indices=col_indices[pos:],
+                weight_slice=weights[pos:]
             )
-            progress_bar.update(1)
+        )
+        progress_bar.update(1)
         progress_bar.close()
 
         return list_of_sparse_tensors
@@ -203,6 +203,7 @@ class RobustListLearner(nn.Module):
             col_indices: torch.Tensor,
             weight_slice: torch.Tensor
     ) -> torch.sparse.FloatTensor:
+
         indices = torch.stack(
             (
                 row_indices,

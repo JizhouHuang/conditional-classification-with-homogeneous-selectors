@@ -12,17 +12,21 @@ def main():
     print(f"Using device: {device}")
 
     # Load the configuration from the YAML file
-    with open('src/config/data/hepatitis.yaml', 'r') as file:
+    with open('src/config/data/wdbc.yaml', 'r') as file:
         config = yaml.safe_load(file)
 
     # Extract configuration values
-    data_frac = config['data_frac']
     data_file_path = config['data_file_path']
     config_file_path = config['config_file_path']
     attribute_names = config['attribute_names']
+    label_name = config['label_name']
     categorical_attr_names = config['categorical_attr_names']
+    binary_attr_names = config['binary_attr_names']
+    sparse_attr_names = config['sparse_attr_names']
     label_true = config['label_true']
     label_false = config['label_false']
+    attr_true = config['attr_true']
+    attr_false = config['attr_false']
 
     num_experiment = 2
     sparse_errs = torch.ones(num_experiment)
@@ -43,19 +47,26 @@ def main():
         uci_data = UCIMedicalDataset(
             file_path=data_file_path,
             attributes=attribute_names,
-            categorical_attr=categorical_attr_names,
+            label_name=label_name,
+            categorical_attr_names=categorical_attr_names,
+            binary_attr_names=binary_attr_names,
+            sparse_attr_names=sparse_attr_names,
             label_true=label_true,
             label_false=label_false,
+            attr_true=attr_true,
+            attr_false=attr_false,
             device=device
         )
-        data_train, data_test = uci_data.slice_with_ratio(data_frac)
 
         # Run the experiment
-        res = experiment(data_train, data_test)
+        res = experiment(uci_data)
         sparse_errs[experiment_id] = res[0][1]
         cond_errs_wo[experiment_id] = res[1][1]
         cond_errs[experiment_id], coverages[experiment_id] = res[2][1]
-    
+        print(res[0][0])
+        print(res[1][0])
+        print(res[2][0])
+        
     # Print the results in a table format
     table = [
         ["Classifier Type", "Number of Experiments", "Average Est Error Rate", "Average Coverage"],
@@ -64,6 +75,7 @@ def main():
         ["Conditional Sparse", num_experiment, torch.mean(cond_errs), torch.mean(coverages)]
     ]
     print(tabulate(table, headers="firstrow", tablefmt="grid"))
+    
 
 if __name__ == "__main__":
     main()

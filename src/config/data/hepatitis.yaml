@@ -1,6 +1,5 @@
 data_file_path: "src/data/hepatitis.data"  # Replace with your file path
-data_frac: 0.6
-config_file_path: 'src/config/model/models.yaml'
+config_file_path: "src/config/model/models.yaml"
 attribute_names:
   - "Class"  # Target (DIE=1, LIVE=2)
   - "Age"
@@ -22,7 +21,24 @@ attribute_names:
   - "Albumin"
   - "Protime"
   - "Histology"
+label_name: "Class"
 categorical_attr_names:
   - "Sex"
+binary_attr_names:
+  - "Steroid"
+  - "Antivirals"
+  - "Fatigue"
+  - "Malaise"
+  - "Anorexia"
+  - "Liver Big"
+  - "Liver Firm"
+  - "Spleen Palpable"
+  - "Spiders"
+  - "Ascites"
+  - "Varices"
+  - "Histology"
+sparse_attr_names: null
 label_true: 2
 label_false: 1
+attr_true: 2
+attr_false: 1

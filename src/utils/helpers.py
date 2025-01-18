@@ -8,10 +8,14 @@ class UCIMedicalDataset:
             self,
             file_path: str, 
             attributes: List[str], 
-            categorical_attr: List[str], 
-            label_name: str = "Class", 
-            label_true: int = 1,
-            label_false: int = 0,
+            label_name: str, 
+            categorical_attr_names: List[str],
+            binary_attr_names: List[str],
+            sparse_attr_names: List[str], 
+            label_true: int,
+            label_false: int,
+            attr_true: int,
+            attr_false: int,
             na_values: str = "?",
             device: torch.device=torch.device('cpu')
         ) -> torch.Tensor:
@@ -20,11 +24,11 @@ class UCIMedicalDataset:
         Dimension of the data: [num_samples, num_features+1] where the first column is the label.
 
         Parameters:
-        file_path (str):            The path to the dataset file.
-        attributes (list):          The list of attribute names.
-        categorical_attr (list):    The list of categorical attribute names.
-        label_name (str):           The name of the label column.
-        na_values (str):            The string to recognize as missing values.
+        file_path (str):                The path to the dataset file.
+        attributes (list):              The list of attribute names.
+        categorical_attr_names (list):  The list of categorical attribute names.
+        label_name (str):               The name of the label column.
+        na_values (str):                The string to recognize as missing values.
         """
 
         data = pd.read_csv(
@@ -34,24 +38,46 @@ class UCIMedicalDataset:
             na_values=na_values
         )
 
+        # drop sparse attributes
+        if sparse_attr_names:
+            data = data.drop(
+                labels=sparse_attr_names,
+                axis=1
+            )
+        
+        # move label column to the first
+        data = data[
+            [label_name] + [col for col in data.columns if col != label_name]
+        ]
+
+        # map binary attributes to {-1, +1}
+        if binary_attr_names:
+            data[binary_attr_names] = data[binary_attr_names].replace(
+                {
+                    attr_false: -1, 
+                    attr_true: 1
+                }
+            )
+
+        # Map labels to {0, 1}
+        data[label_name] = data[label_name].replace({label_false: 0, label_true: 1})
+
         # Display basic info
         # print(data.head())
         # print(data.isnull().sum())  # Check for missing values
+
+        # Convert categorical columns (e.g., "Sex") to one-hot encoding if needed
+        if categorical_attr_names:
+            data = pd.get_dummies(
+                data, 
+                columns=categorical_attr_names
+            )
 
         # Fill missing values (e.g., with the column mean)
         data.fillna(
             data.mean(), 
             inplace=True
         )
-
-        # Convert categorical columns (e.g., "Sex") to one-hot encoding if needed
-        data = pd.get_dummies(
-            data, 
-            columns=categorical_attr
-        )
-
-        # Map labels to {0, 1}
-        data[label_name] = data[label_name].map({label_false: 0, label_true: 1})
 
         # Center and normalize the features (excluding the label column)
         col_to_normalize = [col for col in data.columns if col != label_name]

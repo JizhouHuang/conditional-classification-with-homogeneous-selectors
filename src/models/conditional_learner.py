@@ -110,6 +110,7 @@ class ConditionalLearnerForFiniteClass(nn.Module):
                 batch_size=self.batch_size,
                 device=data.device
             )
+
             selectors = selector_learner(
                 dataset_train=dataset_train,
                 dataset_val=dataset_val,
