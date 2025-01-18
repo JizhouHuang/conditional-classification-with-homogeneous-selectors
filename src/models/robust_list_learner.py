@@ -54,6 +54,9 @@ class RobustListLearner(nn.Module):
         labeled_features = labels.unsqueeze(1) * features
 
         sample_size, self.sample_dim = labeled_features.shape[0], labeled_features.shape[1]
+        # handle exception that sparsity level exceeds the number of features
+        if self.sample_dim < self.sparsity:
+            self.sparsity = self.sample_dim
         
         # Generate row indices of all possible combinations of samples
         # print(f"{self.header} computing combinations of sample indices ...")
