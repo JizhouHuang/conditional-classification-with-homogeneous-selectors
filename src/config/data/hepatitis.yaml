@@ -1,6 +1,6 @@
 data_file_path: "src/data/hepatitis.data"  # Replace with your file path
 data_frac: 0.6
-config_file_path: 'src/config/model/model_toy.yaml'
+config_file_path: 'src/config/model/models.yaml'
 attribute_names:
   - "Class"  # Target (DIE=1, LIVE=2)
   - "Age"

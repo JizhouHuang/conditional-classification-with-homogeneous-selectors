@@ -27,7 +27,7 @@ class ExperimentCCSC(nn.Module):
         config_file_path (str): The path to the configuration file.
 
         Explanations:
-        data_frac_rll:      Fraction of training data used for Robust List Learning.
+        num_sample_rll:     Number of training data used for Robust List Learning.
         margin:             According to Appendix A, the RHS of the linear system is formed by labels subtracted by the margin.
         sparsity:           Number of non-zero dimensions for the resulting sparse representations.
         num_cluster:        To speed up the computation, instead of iterating only one classifier at a time, 
@@ -45,7 +45,7 @@ class ExperimentCCSC(nn.Module):
             config = yaml.safe_load(file)
         
         # Load configuration values
-        self.data_frac_rll = config['data_frac_rll']
+        self.num_sample_rll = config['num_sample_rll']
         self.margin = config['margin']
         self.sparsity = config['sparsity']
         self.num_cluster = config['num_cluster']
@@ -84,14 +84,13 @@ class ExperimentCCSC(nn.Module):
             num_cluster=self.num_cluster
         ).to(data_train.device)
 
-        list_learning_sample_size = int(self.data_frac_rll * data_train.shape[0])
         rl_dataloader = DataLoader(
             TransformedDataset(data_train),
-            batch_size=list_learning_sample_size
+            batch_size=self.num_sample_rll
         )
         table = [
             ["Algorithm", "Sample Size", "Sample Dimension", "Data Device", "Sparsity", "Margin", "Max Clusters"],
-            ["Robust List Learning", list_learning_sample_size, data_train.shape[1] - 1, data_train.device, self.sparsity, self.margin, self.num_cluster + 1]
+            ["Robust List Learning", self.num_sample_rll, data_train.shape[1] - 1, data_train.device, self.sparsity, self.margin, self.num_cluster + 1]
         ]
         print(tabulate(table, headers="firstrow", tablefmt="grid"))
 

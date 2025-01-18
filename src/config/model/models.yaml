@@ -1,7 +1,7 @@
-data_frac_rll: 0.6
+num_sample_rll: 50
 margin: 0.001
 sparsity: 3
-num_cluster: 256
+num_cluster: 128
 data_frac_psgd: 0.7
 lr_coeff: 1.0
 num_iter: 2048
