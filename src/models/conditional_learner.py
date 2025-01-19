@@ -85,7 +85,7 @@ class ConditionalLearnerForFiniteClass(nn.Module):
         ).to(data.device)
 
         # initialize evaluation dataset for conditional learner
-        eval_dataset = TransformedDataset(data)
+        dataset_eval = TransformedDataset(data)
 
         for i, classifiers in enumerate(
             tqdm(
@@ -100,6 +100,7 @@ class ConditionalLearnerForFiniteClass(nn.Module):
                 dataset, 
                 [self.sample_size_psgd, len(dataset) - self.sample_size_psgd]
             )
+
             selector_learner = SelectorPerceptron(
                 prev_header=self.header + ">",
                 dim_sample=self.dim_sample,
@@ -118,21 +119,21 @@ class ConditionalLearnerForFiniteClass(nn.Module):
             )  # [cluster size, dim sample]
 
             candidate_classifiers[i, ...], candidate_selectors[i, ...] = self.evaluate(
-                eval_dataset=eval_dataset,   # could use different data for each evaluation
+                dataset_eval=dataset_eval,   # could use different data for each evaluation
                 classifiers=classifiers.to_dense(),
                 selectors=selectors
             )
 
         print(f"{self.header} evaluating for the final candidates...")
         return self.evaluate(
-            eval_dataset=eval_dataset,
+            dataset_eval=dataset_eval,
             classifiers=candidate_classifiers,
             selectors=candidate_selectors
         )
 
     def evaluate(
             self,
-            eval_dataset: TransformedDataset,
+            dataset_eval: TransformedDataset,
             classifiers: torch.Tensor,
             selectors: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -143,14 +144,14 @@ class ConditionalLearnerForFiniteClass(nn.Module):
         a cluster and returns the pair with the minimum error rate.
 
         Parameters:
-        eval_dataset (TransformedDataset): The dataset to evaluate the classifiers and selectors.
+        dataset_eval (TransformedDataset): The dataset to evaluate the classifiers and selectors.
         classifiers (torch.Tensor): The tensor containing classifier weights.
         selectors (torch.Tensor): The tensor containing selector weights.
 
         Returns:
         Tuple[torch.Tensor, torch.Tensor]: The classifier and selector with the minimum error rate.
         """
-        labels, features = eval_dataset[:]
+        labels, features = dataset_eval[:]
 
         errors = (
             Classify(

@@ -14,7 +14,8 @@ def main():
     print(f"Using device: {device}")
 
     # Load the configuration from the YAML file
-    with open('src/config/data/diabetes.yaml', 'r') as file:
+    # Datasets: diabetes, haberman, hepatitis, hypothyroid, wdbc
+    with open('src/config/data/haberman.yaml', 'r') as file:
         config = yaml.safe_load(file)
 
     # Extract configuration values
