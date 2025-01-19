@@ -15,7 +15,9 @@ def main():
 
     # Load the configuration from the YAML file
     # Datasets: diabetes, haberman, hepatitis, hypothyroid, wdbc
-    with open('src/config/data/haberman.yaml', 'r') as file:
+    data_name = "diabetes"
+    experiment_config_file_path = "".join(["src/config/data/", data_name, ".yaml"])
+    with open(experiment_config_file_path, 'r') as file:
         config = yaml.safe_load(file)
 
     # Extract configuration values
@@ -72,10 +74,10 @@ def main():
     min_cond_err, min_cond_ind = torch.min(cond_errs, dim=0)
     # Print the results in a table format
     table = [
-        ["Classifier Type", "Number of Experiments", "Min Est Error Rate", "Min Coverage", "Avg Est Error Rate", "Avg Coverage"],
-        ["Classic Sparse", num_experiment, torch.min(sparse_errs), 1, torch.mean(sparse_errs), 1],
-        ["Cond Sparse w/o Selector", num_experiment, cond_errs_wo[min_cond_ind], 1, torch.mean(cond_errs_wo), 1],
-        ["Cond Sparse", num_experiment, min_cond_err, coverages[min_cond_ind], torch.mean(cond_errs), torch.mean(coverages)]
+        ["Classifier Type", "Data", "Trials", "Min Est ER", "Min Coverage", "Avg Est ER", "Avg Coverage"],
+        ["Classic Sparse", data_name, num_experiment, torch.min(sparse_errs), 1, torch.mean(sparse_errs), 1],
+        ["Cond Sparse w/o Selector", data_name, num_experiment, cond_errs_wo[min_cond_ind], 1, torch.mean(cond_errs_wo), 1],
+        ["Cond Sparse", data_name, num_experiment, min_cond_err, coverages[min_cond_ind], torch.mean(cond_errs), torch.mean(coverages)]
     ]
     print(tabulate(table, headers="firstrow", tablefmt="grid"))
     
