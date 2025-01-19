@@ -131,6 +131,7 @@ class ExperimentCCSC(nn.Module):
             sparse_classifier_clusters=sparse_classifier_clusters
         )   # Tuple[torch.Tensor, torch.Tensor]
 
+        # model selection for sparse classifiers based on regular classification error
         print(" ".join([self.header, "finding empirical error minimizer from sparse perceptrons ..."]))
         eem_classifier, min_error = None, 1
         for classifiers in tqdm(
@@ -148,7 +149,7 @@ class ExperimentCCSC(nn.Module):
                 min_error = error_rate
                 eem_classifier = classifiers[index].to_dense()
         
-        # Estimate error measures
+        # Estimate error measures with selectors
         errorwo, error, coverage = self.error_rate_est(
             data_test=data_test, 
             predict=Classify, 
@@ -164,10 +165,10 @@ class ExperimentCCSC(nn.Module):
         
         # Print the results in a table format
         table = [
-            ["Classifier Type", "Test Sample Size", "Data Device", "Est Error Rate", "Coverage"],
-            ["Classic Sparse", data_test.shape[0], data_test.device, min_error, 1],
-            ["Conditional Sparse w/o Selector", data_test.shape[0], data_test.device, errorwo, 1],
-            ["Conditional Sparse", data_test.shape[0], data_test.device, error, coverage]
+            ["Classifier Type", "Test Sample Size", "Data Device", "Classifier Sparsity", "Est Error Rate", "Coverage"],
+            ["Classic Sparse", data_test.shape[0], data_test.device, self.sparsity, min_error, 1],
+            ["Conditional Sparse w/o Selector", data_test.shape[0], data_test.device, self.sparsity, errorwo, 1],
+            ["Conditional Sparse", data_test.shape[0], data_test.device, self.sparsity, error, coverage]
         ]
         print(tabulate(table, headers="firstrow", tablefmt="grid"))
 
