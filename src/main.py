@@ -12,7 +12,7 @@ def main():
     print(f"Using device: {device}")
 
     # Load the configuration from the YAML file
-    with open('src/config/data/wdbc.yaml', 'r') as file:
+    with open('src/config/data/diabetes.yaml', 'r') as file:
         config = yaml.safe_load(file)
 
     # Extract configuration values
@@ -28,7 +28,7 @@ def main():
     attr_true = config['attr_true']
     attr_false = config['attr_false']
 
-    num_experiment = 2
+    num_experiment = 100
     sparse_errs = torch.ones(num_experiment)
     cond_errs_wo = torch.ones(num_experiment)
     cond_errs = torch.ones(num_experiment)
