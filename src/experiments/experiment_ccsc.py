@@ -78,7 +78,7 @@ class ExperimentCCSC(nn.Module):
         # Learn the sparse classifiers
         print(" ".join([self.header, "initializing robust list learner for sparse perceptrons ..."]))
         data_train, data_test = data.slice_with_ratio(self.data_frac)
-        
+
         robust_list_learner = RobustListLearner(
             prev_header=self.header + ">",
             sparsity=self.sparsity, 
@@ -137,7 +137,8 @@ class ExperimentCCSC(nn.Module):
         for classifiers in tqdm(
             sparse_classifier_clusters, 
             total=len(sparse_classifier_clusters), 
-            desc=f"{self.header} find EEM"
+            desc=f"{self.header} find EEM",
+            leave=False
         ):
             error_rates, _, _ = self.error_rate_est(
                 data_test=data_test,

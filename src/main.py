@@ -30,7 +30,7 @@ def main():
     attr_true = config['attr_true']
     attr_false = config['attr_false']
 
-    num_experiment = 100
+    num_experiment = 2
     sparse_errs = torch.ones(num_experiment)
     cond_errs_wo = torch.ones(num_experiment)
     cond_errs = torch.ones(num_experiment)
@@ -71,10 +71,10 @@ def main():
     min_cond_err, min_cond_ind = torch.min(cond_errs, dim=0)
     # Print the results in a table format
     table = [
-        ["Classifier Type", "Number of Experiments", "Average Est Error Rate", "Average Coverage"],
-        ["Classic Sparse", num_experiment, torch.min(sparse_errs), 1],
-        ["Conditional Sparse w/o Selector", num_experiment, cond_errs_wo[min_cond_ind], 1],
-        ["Conditional Sparse", num_experiment, min_cond_err, coverages[min_cond_ind]]
+        ["Classifier Type", "Number of Experiments", "Min Est Error Rate", "Min Coverage", "Average Est Error Rate", "Average Coverage"],
+        ["Classic Sparse", num_experiment, torch.min(sparse_errs), 1, torch.mean(sparse_errs), 1],
+        ["Conditional Sparse w/o Selector", num_experiment, cond_errs_wo[min_cond_ind], 1, torch.mean(cond_errs_wo), 1],
+        ["Conditional Sparse", num_experiment, min_cond_err, coverages[min_cond_ind], torch.mean(cond_errs), torch.mean(coverages)]
     ]
     print(tabulate(table, headers="firstrow", tablefmt="grid"))
     
