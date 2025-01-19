@@ -104,7 +104,7 @@ class ExperimentCCSC(nn.Module):
 
         table = [
             ["Algorithm", "Sample Size", "Sample Dimension", "Data Device", "Sparsity", "Margin", "Cluster Size", "Max Clusters"],
-            ["Robust List Learning", min(self.num_sample_rll, data_train.size(0)), data_train.shape[1] - 1, data_train.device, min(data_train.shape[1] - 1, self.sparsity), self.margin, sparse_classifier_clusters[0].size(0), len(sparse_classifier_clusters)]
+            ["List Learning", min(self.num_sample_rll, data_train.size(0)), data_train.shape[1] - 1, data_train.device, min(data_train.shape[1] - 1, self.sparsity), self.margin, sparse_classifier_clusters[0].size(0), len(sparse_classifier_clusters)]
         ]
         print(tabulate(table, headers="firstrow", tablefmt="grid"))
 
@@ -121,7 +121,7 @@ class ExperimentCCSC(nn.Module):
 
         table = [
             ["Algorithm", "Sample Size", "Sample Dimension", "Data Device", "Max Iterations", "LR Scaler", "Batch Size"],
-            ["Conditional Classification", data_train.shape[0], data_train.shape[1] - 1, data_train.device, self.num_iter, self.lr_coeff, self.batch_size]
+            ["Cond Classification", data_train.shape[0], data_train.shape[1] - 1, data_train.device, self.num_iter, self.lr_coeff, self.batch_size]
         ]
 
         print(tabulate(table, headers="firstrow", tablefmt="grid"))
@@ -166,10 +166,10 @@ class ExperimentCCSC(nn.Module):
         
         # Print the results in a table format
         table = [
-            ["Classifier Type", "Test Sample Size", "Data Device", "Classifier Sparsity", "Est Error Rate", "Coverage"],
-            ["Classic Sparse", data_test.shape[0], data_test.device, self.sparsity, min_error, 1],
-            ["Conditional Sparse w/o Selector", data_test.shape[0], data_test.device, self.sparsity, errorwo, 1],
-            ["Conditional Sparse", data_test.shape[0], data_test.device, self.sparsity, error, coverage]
+            ["Classifier Type", "Test Sample Size", "Classifier Sparsity", "Est Error Rate", "Coverage"],
+            ["Classic Sparse", data_test.shape[0], self.sparsity, min_error, 1],
+            ["Cond Sparse w/o Selector", data_test.shape[0], self.sparsity, errorwo, 1],
+            ["Cond Sparse", data_test.shape[0], self.sparsity, error, coverage]
         ]
         print(tabulate(table, headers="firstrow", tablefmt="grid"))
 
