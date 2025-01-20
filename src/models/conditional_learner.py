@@ -3,7 +3,8 @@ import torch.nn as nn
 from torch.utils.data import random_split
 from tqdm import tqdm
 from typing import List, Tuple
-from ..utils.helpers import Classify, TransformedDataset
+from ..utils.data import TransformedDataset
+from ..utils.predictions import LinearModel, ConditionalLinearModel
 from .projected_sgd import SelectorPerceptron
 
 class ConditionalLearnerForFiniteClass(nn.Module):
@@ -50,7 +51,7 @@ class ConditionalLearnerForFiniteClass(nn.Module):
     def forward(
             self, 
             data: torch.Tensor,
-            sparse_classifier_clusters: List[torch.sparse.FloatTensor]
+            classifier_clusters: List[ConditionalLinearModel]
     ) -> torch.Tensor:
         """
         Call PSGD optimizer for each cluster of sparse classifiers using all the data given.
@@ -65,7 +66,7 @@ class ConditionalLearnerForFiniteClass(nn.Module):
         At last, we use the same data set to find the best classifier-selector pair across cluster.
 
         Parameters:
-        sparse_classifier_clusters (List[torch.sparse.FloatTensor]): The list of sparse classifiers.
+        classifier_clusters (List[ConditionalLinearModel]): The list of sparse classifiers.
 
         Returns:
         selector_list (torch.Tensor): The list of weights for each classifier.
@@ -76,26 +77,27 @@ class ConditionalLearnerForFiniteClass(nn.Module):
                                               ...
         """        
         
-        num_cluster = len(sparse_classifier_clusters)
         candidate_selectors = torch.zeros(
-            [num_cluster, self.dim_sample]
+            [len(classifier_clusters), self.dim_sample]
         ).to(data.device)
         candidate_classifiers = torch.zeros(
-            [num_cluster, self.dim_sample]
+            [len(classifier_clusters), self.dim_sample]
         ).to(data.device)
 
         # initialize evaluation dataset for conditional learner
-        dataset_eval = TransformedDataset(data)
+        labels_eval, features_eval = data[:, 0], data[:, 1:]
 
         for i, classifiers in enumerate(
             tqdm(
-                sparse_classifier_clusters, 
-                # total=num_cluster, 
+                classifier_clusters, 
                 desc=self.header,
                 # leave=False
             )
         ):
-            dataset = TransformedDataset(data, classifiers)
+            dataset = TransformedDataset(
+                data=data,
+                predictor=classifiers
+            )
             dataset_train, dataset_val = random_split(
                 dataset, 
                 [self.sample_size_psgd, len(dataset) - self.sample_size_psgd]
@@ -105,7 +107,7 @@ class ConditionalLearnerForFiniteClass(nn.Module):
                 prev_header=self.header + ">",
                 dim_sample=self.dim_sample,
                 cluster_id = i + 1,
-                cluster_size=classifiers.size(0),
+                cluster_size=classifiers.predictor.size(0),
                 num_iter=self.num_iter,
                 lr_beta=self.lr_beta,
                 batch_size=self.batch_size,
@@ -118,56 +120,29 @@ class ConditionalLearnerForFiniteClass(nn.Module):
                 init_weight=self.init_weight.to(data.device)
             )  # [cluster size, dim sample]
 
-            candidate_classifiers[i, ...], candidate_selectors[i, ...] = self.evaluate(
-                dataset_eval=dataset_eval,   # could use different data for each evaluation
-                classifiers=classifiers.to_dense(),
-                selectors=selectors
+            classifiers.set_selector(weights=selectors)
+            _, min_ids = torch.min(
+                classifiers.conditional_error_rate(
+                    X=features_eval,
+                    y=labels_eval
+                ),
+                dim=0
             )
+            candidate_classifiers[i, ...], candidate_selectors[i, ...] = classifiers.predictor[min_ids].to_dense(), selectors[min_ids]
+            classifiers.set_selector(weights=None)
 
-        print(f"{self.header} evaluating for the final candidates...")
-        return self.evaluate(
-            dataset_eval=dataset_eval,
-            classifiers=candidate_classifiers,
-            selectors=candidate_selectors
+        classifiers = ConditionalLinearModel(
+            seletor_weights=candidate_selectors,
+            predictor_weights=candidate_classifiers
         )
-
-    def evaluate(
-            self,
-            dataset_eval: TransformedDataset,
-            classifiers: torch.Tensor,
-            selectors: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Evaluate the classifiers and selectors on the given evaluation dataset.
-
-        This function computes the conditional error rates for all the classifier-selector pairs in
-        a cluster and returns the pair with the minimum error rate.
-
-        Parameters:
-        dataset_eval (TransformedDataset): The dataset to evaluate the classifiers and selectors.
-        classifiers (torch.Tensor): The tensor containing classifier weights.
-        selectors (torch.Tensor): The tensor containing selector weights.
-
-        Returns:
-        Tuple[torch.Tensor, torch.Tensor]: The classifier and selector with the minimum error rate.
-        """
-        labels, features = dataset_eval[:]
-
-        errors = (
-            Classify(
-                classifier=classifiers,
-                data=features.T
-            )
-        ) != labels
-        selections = Classify(
-            classifier=selectors,
-            data=features.T
+        _, min_ids = torch.min(
+            classifiers.conditional_error_rate(
+                X=features_eval,
+                y=labels_eval
+            ),
+            dim=0
         )
-
-        conditional_error_rate = (errors * selections).sum(dim=-1) / selections.sum(dim=-1)
-        # replace NaN to 1
-        conditional_error_rate[torch.isnan(conditional_error_rate)] = 1
-
-        min_error, min_index = torch.min(conditional_error_rate, dim=0)
-
-        return classifiers[min_index], selectors[min_index]
+        return ConditionalLinearModel(
+            seletor_weights=candidate_selectors[min_ids],
+            predictor_weights=candidate_classifiers[min_ids]
+        )

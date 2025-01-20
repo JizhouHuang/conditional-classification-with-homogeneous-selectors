@@ -1,7 +1,10 @@
 import torch
 import torch.nn as nn
+from torch.utils.data import DataLoader
 import math
-from ..utils.helpers import TransformedDataset
+from typing import List
+from ..utils.data import TransformedDataset
+from ..utils.predictions import ConditionalLinearModel
 from tqdm import tqdm
 
 class RobustListLearner(nn.Module):
@@ -27,17 +30,17 @@ class RobustListLearner(nn.Module):
 
     def forward(
             self, 
-            dataset: TransformedDataset
-    ) -> list[torch.sparse.FloatTensor]:
+            dataset: DataLoader
+    ) -> List[ConditionalLinearModel]:
         """
         Perform robust list learning as specified by the algorithm in Appendix A.
         
         Parameters:
-        dataset (torch.Tensor):              The input dataset. 
+        dataset (DataLoader):      The input dataset. 
                                            The first column is the label, which takes values in {0, 1}.
         
         Returns:
-        sparse_weight_list (list[torch.sparse.FloatTensor]): The list of weights for each combination.
+        sparse_weight_list (list[ConditionalLinearModel]): The list of weights for each combination.
                                            The weight_list is represented as a sparse tensor.
                                            The order of the weight vectors in the list is the same as the following two loops:
                                            for features in feature_combinations:
@@ -48,7 +51,7 @@ class RobustListLearner(nn.Module):
 
         # Extract features and labels
         # Assume the first column is the label column
-        labels, features = dataset[:]
+        labels, features = next(iter(dataset))
         # Map the labels from {0, 1} to {-1, +1}
         labels = 2 * labels - 1
         
@@ -143,18 +146,17 @@ class RobustListLearner(nn.Module):
         # ).squeeze() # [(sample_dim choose sparsity) * (sample_size choose sparsity), sparsity]
 
         # batch method
-        sparse_weight_list = self.to_batched_sparse_tensor(
+        return self.to_batched_sparse_tensor(
             weights=weight_list,
             feature_combinations=feature_indices
         )
 
-        return sparse_weight_list
 
     def to_batched_sparse_tensor(
             self,
             weights: torch.Tensor,
             feature_combinations: torch.Tensor
-    ) -> list[torch.sparse.FloatTensor]:
+    ) -> List[ConditionalLinearModel]:
 
         col_indices = feature_combinations.repeat_interleave(
             self.num_sample_combinations,
@@ -167,11 +169,11 @@ class RobustListLearner(nn.Module):
         ).repeat_interleave(self.sparsity).to(col_indices.device)
 
         # add progress bar to sparse encoding process
-        progress_bar = tqdm(
-            total=math.ceil(col_indices.shape[0] / self.cluster_size),
-            desc=f"{self.header} encoding sparse classifiers",
-            # leave=False
-        )
+        # progress_bar = tqdm(
+        #     total=math.ceil(col_indices.shape[0] / self.cluster_size),
+        #     desc=f"{self.header} encoding sparse classifiers",
+        #     # leave=False
+        # )
         list_of_sparse_tensors = []
         pos = 0
         while pos < col_indices.size(0) - self.cluster_size:
@@ -183,7 +185,7 @@ class RobustListLearner(nn.Module):
                 )
             )
             pos += self.cluster_size
-            progress_bar.update(1)
+            # progress_bar.update(1)
 
         list_of_sparse_tensors.append(
             self.to_sparse_tensor(
@@ -192,8 +194,8 @@ class RobustListLearner(nn.Module):
                 weight_slice=weights[pos:]
             )
         )
-        progress_bar.update(1)
-        progress_bar.close()
+        # progress_bar.update(1)
+        # progress_bar.close()
 
         return list_of_sparse_tensors
 
@@ -202,7 +204,7 @@ class RobustListLearner(nn.Module):
             row_indices: torch.Tensor,
             col_indices: torch.Tensor,
             weight_slice: torch.Tensor
-    ) -> torch.sparse.FloatTensor:
+    ) -> ConditionalLinearModel:
 
         indices = torch.stack(
             (
@@ -213,16 +215,18 @@ class RobustListLearner(nn.Module):
         size = torch.Size(
             [weight_slice.shape[0], self.sample_dim]
         )
-        return torch.sparse_coo_tensor(
-            indices,
-            weight_slice.flatten(),
-            size
+        return ConditionalLinearModel(
+            predictor_weights=torch.sparse_coo_tensor(
+                indices,
+                weight_slice.flatten(),
+                size
+            )
         )
 
     # verification function
     def forward_verifier(
             self, 
-            dataset: TransformedDataset
+            dataset: DataLoader
     ) -> torch.Tensor:
         """
         Perform robust list learning of sparse linear classifiers for verification purpose.

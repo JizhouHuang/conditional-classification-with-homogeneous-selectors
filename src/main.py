@@ -5,7 +5,7 @@ from tqdm import tqdm
 import yaml
 from tabulate import tabulate
 from .experiments.experiment_ccsc import ExperimentCCSC
-from .utils.helpers import UCIMedicalDataset
+from .utils.data import UCIMedicalDataset
 
 def main():
 
@@ -15,7 +15,7 @@ def main():
 
     # Load the configuration from the YAML file
     # Datasets: diabetes, haberman, hepatitis, hypothyroid, wdbc
-    data_name = "diabetes"
+    data_name = "haberman"
     experiment_config_file_path = "".join(["src/config/data/", data_name, ".yaml"])
     with open(experiment_config_file_path, 'r') as file:
         config = yaml.safe_load(file)
@@ -33,7 +33,7 @@ def main():
     attr_true = config['attr_true']
     attr_false = config['attr_false']
 
-    num_experiment = 100
+    num_experiment = 1
     sparse_errs = torch.ones(num_experiment)
     cond_errs_wo = torch.ones(num_experiment)
     cond_errs = torch.ones(num_experiment)

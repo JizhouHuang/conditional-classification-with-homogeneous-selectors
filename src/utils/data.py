@@ -1,7 +1,8 @@
-from typing import Union, List, Tuple
+from typing import List, Tuple, Any
 import torch
 import pandas as pd
 from torch.utils.data import Dataset
+from .predictions import LinearModel
 
 class UCIMedicalDataset:
     def __init__(
@@ -106,37 +107,29 @@ class UCIMedicalDataset:
         cutoff_index = int(ratio * self.data.shape[0])
         return self.data[:cutoff_index], self.data[cutoff_index:]
 
-def Classify(
-        classifier: torch.Tensor,
-        data: torch.Tensor
-) -> torch.Tensor:
-    return torch.matmul(classifier, data) > 0
-
-def SparseClassify(
-        classifier: torch.sparse.FloatTensor,
-        data: torch.Tensor
-) -> torch.Tensor:
-    return torch.sparse.mm(classifier, data) > 0
-
 class TransformedDataset(Dataset):
     def __init__(
             self, 
             data: torch.Tensor, 
-            transform: torch.sparse.FloatTensor = None
+            predictor: LinearModel = None
         ):
         """
         Initialize the dataset with a label mapping.
-        Note that the transform will generate cluster_size {0, 1} labels for each example.
+        Note that the label map will generate cluster_size {0, 1} labels for each example.
         A label of "1" indicates the corresponding sparse classifier disagrees with the 
         true original data label.
 
         Parameters:
-        data (torch.Tensor):      The input data.
-        transform (callable):   The label mapping function.
+        data (torch.Tensor):    The input data.
+        predictor:              A tuple of classifier(s) and its corresponding prediction method.
+                                Classifier(s) can be any class, while the prediction method must
+                                take the classifier(s) and the feature in the form of torch.Tensor as
+                                inputs, then outputs a label in the form of torch.Tensor.
         """
         self.data = data
         self.trans_labels = None
-        self.set_transform(transform=transform)
+        self.predictor = predictor
+        self.label_map()
         self.device = data.device
 
     def __len__(self) -> int:
@@ -151,20 +144,24 @@ class TransformedDataset(Dataset):
     def dim(self) -> torch.Tensor:
         return self.data.size(1) - 1
     
-    def set_transform(
-            self, 
-            transform: torch.sparse.FloatTensor
-        ) -> None:
-        if isinstance(transform, torch.Tensor) and transform.is_sparse:
-            features = self.data[:, 1:]
-            self.trans_labels = (
-                SparseClassify(
-                    classifier=transform,
-                    data=features.T
-                ).T # [num_sample, num_classifier]
-            ) != self.data[:, 0].unsqueeze(-1)
+    def label_map(self) -> None:
+        """
+        Map the labels according to the given predictor.
+        """
+        if self.predictor is not None and isinstance(self.predictor, LinearModel):
+            self.trans_labels = self.predictor.errors(
+                X=self.data[:, 1:],     # [data_batch_size, dim_sample]
+                y=self.data[:, 0]       # [data_batch_size]
+            ).T                         # [data_batch_size, cluster_size]
         else:
             self.trans_labels = self.data[:, 0]
+    
+    def set_predictor(
+            self,
+            predictor: LinearModel
+    ):
+        self.predictor = predictor
+        self.label_map()
 
 class FixedIterationLoader:
     def __init__(self, dataloader, max_iterations):

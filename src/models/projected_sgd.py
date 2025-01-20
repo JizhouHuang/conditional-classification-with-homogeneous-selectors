@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
-from ..utils.helpers import Classify, FixedIterationLoader
+from ..utils.data import FixedIterationLoader
+from ..utils.predictions import ConditionalLinearModel
 from typing import List, Tuple
 from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
@@ -40,6 +41,7 @@ class SelectorPerceptron(nn.Module):
         self.cluster_size = cluster_size
         self.num_iter = num_iter
         self.batch_size = batch_size
+        self.device = device
 
         # store the best selectors
         self.selector_list = torch.zeros(
@@ -72,9 +74,7 @@ class SelectorPerceptron(nn.Module):
         dataloader_train = DataLoader(
             dataset_train, 
             batch_size=self.batch_size, 
-            shuffle=True,   # change to False for DEBUG
-            # num_workers=4,
-            # pin_memory=True
+            shuffle=True
         )
 
         # Evaluate the selector perceptron
@@ -87,7 +87,11 @@ class SelectorPerceptron(nn.Module):
         self.projected_SGD(
             dataloader_train=dataloader_train,
             dataloader_val=dataloader_val,
-            weight_w=torch.stack([init_weight, -init_weight])    # [2, cluster_size, dim_sample]
+            model=ConditionalLinearModel(
+                seletor_weights=torch.stack(
+                    [init_weight, -init_weight]
+                ).to(self.device)   # [2, cluster_size, dim_sample]
+            )
         )
 
         self.pairwise_update(
@@ -103,7 +107,7 @@ class SelectorPerceptron(nn.Module):
             self, 
             dataloader_train: DataLoader, 
             dataloader_val: DataLoader,
-            weight_w: torch.Tensor  # [2, cluster_size, dim_sample]
+            model: ConditionalLinearModel
         ) -> None:
         """
         Perform projected stochastic gradient descent.
@@ -111,91 +115,47 @@ class SelectorPerceptron(nn.Module):
         Parameters:
         dataloader_train (DataLoader):  The dataloader for the training dataset.
         dataloader_val (DataLoader):    The dataloader for the evaluation dataset.
-        init_weight (torch.Tensor):     The initial weights for SGD.
+        model (LinearModel):            The initial weights for SGD.
         """
 
         # Initialize the list of weights
-        dataset_val = next(iter(dataloader_val))
+        labels_val, features_val = next(iter(dataloader_val))
         dataloader_fixed = FixedIterationLoader(
             dataloader=dataloader_train,
             max_iterations=self.num_iter
         )
-        # for i in tqdm(range(self.num_iter), desc="PSGD on GPU"):
-        for data in tqdm(
-            dataloader_fixed, 
-            total=dataloader_fixed.max_iterations, 
-            desc=self.header,
-            leave=False
-        ):
+        # enable to show progress bar
+        # for data in tqdm(
+        #     dataloader_fixed, 
+        #     total=dataloader_fixed.max_iterations, 
+        #     desc=self.header,
+        #     leave=False
+        # ):
+        for data in dataloader_fixed:
             # labels:   [data_batch_size, cluster_size]
             # features: [data_batch_size, dim_sample]
             labels, features = data
 
-            # compute the product of label and indicator
-            # print(f"{self.header} computing the selected labels ...")
-            selected_labels = labels.T * (
-                Classify(
-                    classifier=weight_w,
-                    data=features.T
+            # gradient step
+            model.selector.update(
+                weights= - self.beta * model.selector.proj_grad(
+                    X=features,
+                    y=labels.t()
                 )
-            )    # [2, cluster_size, data_batch_size]
+            )
+            # compute conditional error rates
+            conditional_errors = model.conditional_error_rate(
+                X=features_val,
+                y=labels_val.t()
+            )
 
-            # project the features onto the orthogonal complement of the weight vector
-            # print(f"{self.header} computing the orthogonal projection ...")
-            orthogonal_projections = features - (weight_w @ features.T).unsqueeze(-1) * features # [2, cluster_size, data_batch_size, dim_sample]
-
-            # print(f"{self.header} computing the gradients ...")
-            gradients = selected_labels.unsqueeze(-1) * orthogonal_projections   # [2, cluster_size, data_batch_size, dim_sample]
-
-            # update weights by average of gradients over all data samples (subject to change)
-            # print(f"{self.header} computing gradient step ...")
-            weight_u = weight_w - self.beta * torch.mean(gradients, dim=2)   # [2, cluster_size, dim_sample]
-            # print(f"{self.header} normalizing weight vectors ...")
-            weight_w = weight_u / torch.norm(weight_u, p=2, dim=-1).unsqueeze(-1)  # [cluster_size, dim_sample]
-
-            # print(f"{self.header} starting updating the best weights ...")
-            self.update_weight(
-                dataset=dataset_val,
-                weight_w=weight_w
+            self.pairwise_update(
+                curr_error=conditional_errors,
+                min_error=self.min_error,
+                curr_weight=model.selector.weights,
+                min_weight=self.selector_list
             )
             # torch.cuda.synchronize()
-
-    def update_weight(
-            self,
-            dataset: List[torch.Tensor],
-            weight_w: torch.Tensor
-    ) -> None:
-        """
-        Update selector weights according to current classification error.
-
-        Parameters:
-        dataset (List[torch.Tensor]):   The evaluation dataset.
-        weight_w (torch.Tensor):        The current weights for the selectors.
-        """
-
-        # labels:   [data_batch_size, cluster_size]
-        # features: [data_batch_size, dim_sample]
-        labels, features = dataset
-
-        # compute the product of label and indicator for all samples
-        # print(f"{self.header}> updating - computing current prediction ...")
-        predictions = Classify(
-            classifier=weight_w,
-            data=features.T
-        )  # [2, cluster_size, data_batch_size]
-        # compute the conditional errors
-        # print(f"{self.header}> updating - computing conditional errors ...")
-        conditional_errors = (predictions.float() * labels.T).sum(dim=-1) / predictions.sum(dim=-1) # [2, cluster_size]
-        # replace NaN to 1
-        # print(f"{self.header}> updating - handling NaN values ...")
-        conditional_errors[torch.isnan(conditional_errors)] = 1
-        # update the weight list with those better selectors
-        self.pairwise_update(
-            curr_error=conditional_errors,
-            min_error=self.min_error,
-            curr_weight=weight_w,
-            min_weight=self.selector_list
-        )
     
     def pairwise_update(
             self,
