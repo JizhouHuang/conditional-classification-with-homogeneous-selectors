@@ -1,12 +1,11 @@
 import torch
 import torch.nn as nn
 import yaml
-from typing import Callable, Union, Tuple, List
+from typing import Union, Tuple, List
 from tqdm import tqdm
 from tabulate import tabulate
 from torch.utils.data import DataLoader
 from ..utils.data import TransformedDataset, UCIMedicalDataset
-from ..utils.predictions import PredictWithTensor
 from ..models.conditional_learner import ConditionalLearnerForFiniteClass
 from ..models.robust_list_learner import RobustListLearner
 
@@ -113,8 +112,9 @@ class ExperimentCCSC(nn.Module):
             num_iter=self.num_iter, 
             lr_coeff=self.lr_coeff, 
             sample_size_psgd=int(data_train.shape[0] * self.data_frac_psgd), 
-            batch_size=self.batch_size
-        ).to(data_train.device)
+            batch_size=self.batch_size,
+            device=data_train.device
+        )
 
         table = [
             ["Algorithm", "Sample Size", "Sample Dimension", "Data Device", "Max Iterations", "LR Scaler", "Batch Size"],
@@ -124,7 +124,7 @@ class ExperimentCCSC(nn.Module):
         print(tabulate(table, headers="firstrow", tablefmt="grid"))
 
         conditional_classifier = conditional_learner(
-            data=data_train,
+            dataset= TransformedDataset(data_train),
             classifier_clusters=sparse_classifier_clusters
         )   # Tuple[torch.Tensor, torch.Tensor]
 

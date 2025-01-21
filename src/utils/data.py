@@ -2,7 +2,7 @@ from typing import List, Tuple, Any
 import torch
 import pandas as pd
 from torch.utils.data import Dataset
-from .predictions import LinearModel
+from .simple_models import LinearModel
 
 class UCIMedicalDataset:
     def __init__(
@@ -148,11 +148,11 @@ class TransformedDataset(Dataset):
         """
         Map the labels according to the given predictor.
         """
-        if self.predictor is not None and isinstance(self.predictor, LinearModel):
+        if self.predictor and hasattr(self.predictor, 'errors'):
             self.trans_labels = self.predictor.errors(
                 X=self.data[:, 1:],     # [data_batch_size, dim_sample]
                 y=self.data[:, 0]       # [data_batch_size]
-            ).T                         # [data_batch_size, cluster_size]
+            ).t()                       # [data_batch_size, cluster_size]
         else:
             self.trans_labels = self.data[:, 0]
     
@@ -184,46 +184,3 @@ class FixedIterationLoader:
         self.iter_count += 1
         return batch
     
-# Deprecated
-class LabelMapping:
-    """
-    Map the data label according to a given sparse halfspace.
-    """ 
-    def __init__(
-            self, 
-            classifiers: torch.sparse.FloatTensor
-        ):
-        """
-        Initialize the label mapping.
-
-        Parameters:
-        classifier (torch.Tensor):  Sparse classifiers of sparse representation.
-                                    [classifier_batch_size, dim_sample]
-        """
-        self.classifiers = classifiers.to_dense()
-
-    def __call__(
-            self, 
-            sample: torch.Tensor
-        ) -> torch.Tensor:
-        """
-        Change y to y != classifier(x) for the given sample.
-
-        Parameters:
-        sample (torch.Tensor):  The input sample.
-                                [num_features+1] where the first column is a {0, 1}-valued label.
-        
-        Returns:
-        torch.Tensor:           The transformed labels.
-                                [classifier_batch_size]
-        """
-
-        labels = (
-            torch.mv(
-                self.classifiers, 
-                sample[1:]
-            ) >= 0
-        ) != sample[0]
-        # print(f"classifier shape: {self.classifiers.shape}")
-        # print(f"labels shape: {labels.shape}")
-        return labels.float()

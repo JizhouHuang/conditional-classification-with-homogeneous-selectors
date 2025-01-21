@@ -1,6 +1,7 @@
 from typing import Union, List, Tuple, Any, Callable
 import torch
 import torch.nn as nn
+from torch.utils.data import DataLoader
 
 def PredictWithTensor(
         classifier: torch.Tensor,
@@ -169,3 +170,34 @@ class ConditionalLinearModel(nn.Module):
         cond_err_rate = sel_errors.sum(dim=-1) / selections.sum(dim=-1)
         cond_err_rate[torch.isnan(cond_err_rate)] = 1
         return cond_err_rate
+    
+class PredictiveModel(nn.Module):
+    def __init__(
+            self,
+            model: Any,     # any sklearn model
+            device: torch.device
+    ):
+        super(PredictiveModel, self).__init__()
+        self.model = model
+        self.device = device
+    
+    def train(
+            self,
+            model: Any,
+            dataloader: DataLoader
+    ) -> Any:
+        labels, features = next(iter(dataloader))
+        model.fit(features.cpu().numpy(), labels.cpu().numpy())
+        return model
+    
+    def errors(
+            self,
+            X: torch.Tensor,
+            y: torch.Tensor
+    ) -> torch.Tensor:
+        return torch.logical_xor(
+            torch.from_numpy(
+                self.model.predict(X.cpu().numpy())
+            ).to(X.device).bool(),
+            y.bool()
+        )

@@ -3,8 +3,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 import math
 from typing import List
-from ..utils.data import TransformedDataset
-from ..utils.predictions import ConditionalLinearModel
+from ..utils.simple_models import ConditionalLinearModel
 from tqdm import tqdm
 
 class RobustListLearner(nn.Module):

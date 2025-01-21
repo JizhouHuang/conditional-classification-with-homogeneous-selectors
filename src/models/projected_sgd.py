@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from ..utils.data import FixedIterationLoader
-from ..utils.predictions import ConditionalLinearModel
+from ..utils.simple_models import ConditionalLinearModel
 from typing import List, Tuple
 from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm

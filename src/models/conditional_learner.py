@@ -4,7 +4,7 @@ from torch.utils.data import random_split
 from tqdm import tqdm
 from typing import List, Tuple
 from ..utils.data import TransformedDataset
-from ..utils.predictions import LinearModel, ConditionalLinearModel
+from ..utils.simple_models import LinearModel, ConditionalLinearModel
 from .projected_sgd import SelectorPerceptron
 
 class ConditionalLearnerForFiniteClass(nn.Module):
@@ -18,7 +18,8 @@ class ConditionalLearnerForFiniteClass(nn.Module):
             num_iter: int, 
             sample_size_psgd: int,
             lr_coeff: float = 0.5,
-            batch_size: int = 32
+            batch_size: int = 32,
+            device: torch.device = torch.device('cpu')
     ):
         """
         Initialize the conditional learner for finite class classification.
@@ -39,18 +40,22 @@ class ConditionalLearnerForFiniteClass(nn.Module):
         self.num_iter = num_iter
         self.batch_size = batch_size
         self.sample_size_psgd = sample_size_psgd
+        self.device = device
 
         self.lr_beta = lr_coeff * torch.sqrt(
             torch.tensor(
                 1 / (num_iter * dim_sample)
             )
         )
-        self.init_weight = torch.zeros(self.dim_sample, dtype=torch.float32)
-        self.init_weight[0] = 1
+        self.init_weight = torch.randn(
+            self.dim_sample, 
+            device=device
+        )
+        self.init_weight = self.init_weight / torch.norm(self.init_weight, p=2)
 
     def forward(
             self, 
-            data: torch.Tensor,
+            dataset: TransformedDataset,
             classifier_clusters: List[ConditionalLinearModel]
     ) -> torch.Tensor:
         """
@@ -79,13 +84,13 @@ class ConditionalLearnerForFiniteClass(nn.Module):
         
         candidate_selectors = torch.zeros(
             [len(classifier_clusters), self.dim_sample]
-        ).to(data.device)
+        ).to(self.device)
         candidate_classifiers = torch.zeros(
             [len(classifier_clusters), self.dim_sample]
-        ).to(data.device)
+        ).to(self.device)
 
         # initialize evaluation dataset for conditional learner
-        labels_eval, features_eval = data[:, 0], data[:, 1:]
+        labels_eval, features_eval = dataset[:]
 
         for i, classifiers in enumerate(
             tqdm(
@@ -94,9 +99,8 @@ class ConditionalLearnerForFiniteClass(nn.Module):
                 # leave=False
             )
         ):
-            dataset = TransformedDataset(
-                data=data,
-                predictor=classifiers
+            dataset.set_predictor(
+                predictor=classifiers.predictor
             )
             dataset_train, dataset_val = random_split(
                 dataset, 
@@ -111,13 +115,13 @@ class ConditionalLearnerForFiniteClass(nn.Module):
                 num_iter=self.num_iter,
                 lr_beta=self.lr_beta,
                 batch_size=self.batch_size,
-                device=data.device
+                device=self.device
             )
 
             selectors = selector_learner(
                 dataset_train=dataset_train,
                 dataset_val=dataset_val,
-                init_weight=self.init_weight.to(data.device)
+                init_weight=self.init_weight.to(self.device)
             )  # [cluster size, dim sample]
 
             classifiers.set_selector(weights=selectors)
