@@ -47,7 +47,7 @@ class ExperimentCCSC(nn.Module):
             config = yaml.safe_load(file)
         
         # Load configuration values
-        self.data_frac = config['data_frac']
+        # self.data_frac = config['data_frac']
         self.num_sample_rll = config['num_sample_rll']
         self.margin = config['margin']
         self.sparsity = config['sparsity']
@@ -59,7 +59,8 @@ class ExperimentCCSC(nn.Module):
 
     def forward(
             self,
-            data: UCIMedicalDataset
+            data_train: torch.Tensor,
+            data_test: torch.Tensor
     ) -> List[
         Tuple[
             torch.Tensor, 
@@ -79,7 +80,6 @@ class ExperimentCCSC(nn.Module):
         """
         # Learn the sparse classifiers
         print(" ".join([self.header, "initializing robust list learner for sparse perceptrons ..."]))
-        data_train, data_test = data.slice_with_ratio(self.data_frac)
 
         robust_list_learner = RobustListLearner(
             prev_header=self.header + ">",

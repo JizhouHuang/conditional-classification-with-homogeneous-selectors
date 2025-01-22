@@ -134,17 +134,17 @@ class RobustListLearner(nn.Module):
         #     labeled_feature_combinations, 
         #     label_combinations - self.margin
         # )
-        print(f"{self.header} solving the linear system for least square solution ...")
-        weight_list = torch.linalg.lstsq(
-            labeled_feature_combinations,       # [(sample_dim choose sparsity) * (sample_size choose sparsity), sparsity, sparsity]
-            label_combinations - self.margin,   # [(sample_dim choose sparsity) * (sample_size choose sparsity), sparsity]
-            # rcond=1e-5
-        ).solution    # [(sample_dim choose sparsity) * (sample_size choose sparsity), sparsity]
-        # print(f"{self.header} solving the linear system using pseudo-inverse...")
-        # weight_list_ref = torch.matmul(
-        #     torch.linalg.pinv(labeled_feature_combinations),    # [(sample_dim choose sparsity) * (sample_size choose sparsity), sparsity, sparsity]
-        #     (label_combinations - self.margin).unsqueeze(-1)    # [(sample_dim choose sparsity) * (sample_size choose sparsity), sparsity, 1]
-        # ).squeeze() # [(sample_dim choose sparsity) * (sample_size choose sparsity), sparsity]
+        # print(f"{self.header} solving the linear system for least square solution ...")
+        # weight_list = torch.linalg.lstsq(
+        #     labeled_feature_combinations,       # [(sample_dim choose sparsity) * (sample_size choose sparsity), sparsity, sparsity]
+        #     label_combinations - self.margin,   # [(sample_dim choose sparsity) * (sample_size choose sparsity), sparsity]
+        #     rcond=1e-4
+        # ).solution    # [(sample_dim choose sparsity) * (sample_size choose sparsity), sparsity]
+        print(f"{self.header} solving the linear system using pseudo-inverse...")
+        weight_list = torch.matmul(
+            torch.linalg.pinv(labeled_feature_combinations),    # [(sample_dim choose sparsity) * (sample_size choose sparsity), sparsity, sparsity]
+            (label_combinations - self.margin).unsqueeze(-1)    # [(sample_dim choose sparsity) * (sample_size choose sparsity), sparsity, 1]
+        ).squeeze() # [(sample_dim choose sparsity) * (sample_size choose sparsity), sparsity]
 
         # batch method
         return self.to_batched_sparse_tensor(

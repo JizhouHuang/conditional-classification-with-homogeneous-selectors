@@ -2,8 +2,8 @@ import os
 import argparse
 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 import torch
+import pandas as pd
 from tqdm import tqdm
-import yaml
 from tabulate import tabulate
 from .experiments.experiment_baseline import ExperimentBaseline
 from .utils.data import UCIMedicalDataset
@@ -15,26 +15,14 @@ def main(data_name: str):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
 
-    # Load the configuration from the YAML file
     # Datasets: diabetes, haberman, hepatitis, hypothyroid, wdbc
-    experiment_config_file_path = "".join(["src/config/data/", data_name, ".yaml"])
-    with open(experiment_config_file_path, 'r') as file:
-        config = yaml.safe_load(file)
+    # Construct data file paths
+    data_train_path = "".join(["src/data/", data_name, "_train.pkl"])
+    data_test_path = "".join(["src/data/", data_name, "_test.pkl"])
+    # config_file_path = "".join(["src/config/model/", data_name, ".yaml"])
+    config_file_path = "src/config/model/model_toy.yaml"
 
-    # Extract configuration values
-    data_file_path = config['data_file_path']
-    config_file_path = config['config_file_path']
-    attribute_names = config['attribute_names']
-    label_name = config['label_name']
-    categorical_attr_names = config['categorical_attr_names']
-    binary_attr_names = config['binary_attr_names']
-    sparse_attr_names = config['sparse_attr_names']
-    label_true = config['label_true']
-    label_false = config['label_false']
-    attr_true = config['attr_true']
-    attr_false = config['attr_false']
-
-    num_experiment = 1
+    num_experiment = 100
     learners = [LogisticRegLearner, SVMLearner, RandomForestLearner, XGBoostLearner]
     errs = torch.ones([num_experiment, len(learners)])
     cond_errs = torch.ones([num_experiment, len(learners)])
@@ -50,23 +38,29 @@ def main(data_name: str):
             device=device
         )
 
-        # Load and preprocess the data
-        uci_data = UCIMedicalDataset(
-            file_path=data_file_path,
-            attributes=attribute_names,
-            label_name=label_name,
-            categorical_attr_names=categorical_attr_names,
-            binary_attr_names=binary_attr_names,
-            sparse_attr_names=sparse_attr_names,
-            label_true=label_true,
-            label_false=label_false,
-            attr_true=attr_true,
-            attr_false=attr_false,
-            device=device
-        )
+        # Load the data
+        data_train = torch.tensor(
+            pd.read_pickle(data_train_path).to_numpy(), 
+            dtype=torch.float32
+        ).to(device)
+
+        data_test = torch.tensor(
+            pd.read_pickle(data_test_path).to_numpy(), 
+            dtype=torch.float32
+        ).to(device)
 
         # Run the experiment
-        errs[experiment_id], cond_errs[experiment_id], coverages[experiment_id] = experiment(uci_data, learners)
+        # errs[experiment_id], cond_errs[experiment_id], coverages[experiment_id] = experiment(
+        #     data_train, 
+        #     data_test, 
+        #     learners
+        # )
+
+        errs[experiment_id], cond_errs[experiment_id], coverages[experiment_id] = experiment(
+            data_train[:min(1000, data_train.size(0))],
+            data_test[:min(1000, data_test.size(0))],
+            learners
+        )
     
     min_errs, _ = torch.min(errs, dim=0)
     avg_errs = torch.mean(errs, dim=0)

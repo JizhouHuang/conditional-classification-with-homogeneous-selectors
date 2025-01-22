@@ -1,7 +1,8 @@
-data_file_path: "src/data/hypothyroid.data"  # Replace with your file path
+data_train_path: "src/data/hypothyroid_train.pkl"  # Replace with your file path
+data_test_path: "src/data/hypothyroid_test.pkl"
 config_file_path: "src/config/model/hypothyroid.yaml"
 attribute_names:
-  - "diagnose"
+  - "TARGET"
   - "age"
   - "sex"
   - "on_thyroxine"
@@ -27,7 +28,7 @@ attribute_names:
   - "FTI"
   - "TBG_measured"
   - "TBG"
-label_name: "diagnose"
+label_name: "TARGET"
 categorical_attr_names:
   - "sex"
 binary_attr_names:

@@ -1,7 +1,8 @@
-data_file_path: "src/data/hepatitis.data"  # Replace with your file path
+data_train_path: "src/data/hepatitis_train.pkl"  # Replace with your file path
+data_test_path: "src/data/hepatitis_test.pkl"
 config_file_path: "src/config/model/hepatitis.yaml"
 attribute_names:
-  - "Class"  # Target (DIE=1, LIVE=2)
+  - "TARGET"  # Target (DIE=1, LIVE=2)
   - "Age"
   - "Sex"
   - "Steroid"
@@ -21,7 +22,7 @@ attribute_names:
   - "Albumin"
   - "Protime"
   - "Histology"
-label_name: "Class"
+label_name: "TARGET"
 categorical_attr_names:
   - "Sex"
 binary_attr_names:

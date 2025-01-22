@@ -61,7 +61,7 @@ class UCIMedicalDataset:
             )
 
         # Map labels to {0, 1}
-        data[label_name] = data[label_name].replace({label_false: 0, label_true: 1})
+        data[label_name] = data[label_name].map({label_false: 0, label_true: 1})
 
         # Display basic info
         # print(data.head())

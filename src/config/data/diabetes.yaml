@@ -1,4 +1,5 @@
-data_file_path: "src/data/diabetes.data"  # Replace with your file path
+data_train_path: "src/data/diabetes_train.pkl"  # Replace with your file path
+data_test_path: "src/data/diabetes_test.pkl"
 config_file_path: "src/config/model/diabetes.yaml"
 attribute_names:
   - "Pregnancies"
@@ -9,8 +10,8 @@ attribute_names:
   - "BMI"
   - "DiabetesPedigreeFunction"
   - "Age"
-  - "Outcome"
-label_name: "Outcome"
+  - "TARGET"
+label_name: "TARGET"
 categorical_attr_names: null
 binary_attr_names: null
 sparse_attr_names: null

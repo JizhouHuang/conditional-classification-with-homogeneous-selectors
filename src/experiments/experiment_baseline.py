@@ -45,7 +45,6 @@ class ExperimentBaseline(nn.Module):
             config = yaml.safe_load(file)
         
         # Load configuration values
-        self.data_frac = config['data_frac']
         self.num_sample_rll = config['num_sample_rll']
         self.cluster_size = config['cluster_size']
         self.data_frac_psgd = config['data_frac_psgd']
@@ -55,7 +54,8 @@ class ExperimentBaseline(nn.Module):
 
     def forward(
             self,
-            data: UCIMedicalDataset,
+            data_train: torch.Tensor,
+            data_test: torch.Tensor,
             learners: List[Any]
     ) -> List[List[torch.Tensor]]:
         """
@@ -68,11 +68,10 @@ class ExperimentBaseline(nn.Module):
         """
         # Learn the sparse classifiers
         print(" ".join([self.header, "initializing baseline learners ..."]))
-        data_train, data_test = data.slice_with_ratio(self.data_frac)
 
         predictors = []
 
-        for learner in learners:
+        for learner in tqdm(learners, desc=f"{self.header} learning predictors"):
             predictors.append(
                 learner(
                     DataLoader(
