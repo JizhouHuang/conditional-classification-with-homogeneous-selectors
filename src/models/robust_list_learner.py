@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 import math
 from typing import List
-from ..utils.simple_models import ConditionalLinearModel
+from ..utils.simple_models import LinearModel, ConditionalLinearModel
 from tqdm import tqdm
 
 class RobustListLearner(nn.Module):
@@ -15,7 +15,8 @@ class RobustListLearner(nn.Module):
             prev_header: str,
             sparsity: int, 
             margin: float,
-            cluster_size: int
+            cluster_size: int,
+            device: torch.device
     ):
         """
         sparsity (int):           The degree for each combination.
@@ -26,6 +27,7 @@ class RobustListLearner(nn.Module):
         self.sparsity = sparsity
         self.margin = margin
         self.cluster_size = cluster_size
+        self.device = device
 
     def forward(
             self, 
@@ -67,7 +69,7 @@ class RobustListLearner(nn.Module):
         sample_indices = torch.combinations(
             torch.arange(sample_size), 
             self.sparsity
-        ).to(labels.device)   # [sample_size choose sparsity, sparsity]
+        ).to(self.device)   # [sample_size choose sparsity, sparsity]
         
         self.num_sample_combinations = sample_indices.shape[0]
 
@@ -76,7 +78,7 @@ class RobustListLearner(nn.Module):
         feature_indices = torch.combinations(
             torch.arange(self.sample_dim), 
             self.sparsity
-        ).to(labels.device)   # [sample_dim choose sparsity, sparsity]
+        ).to(self.device)   # [sample_dim choose sparsity, sparsity]
         
         self.num_feature_combinations = feature_indices.shape[0]
 
@@ -165,7 +167,7 @@ class RobustListLearner(nn.Module):
         # ensure cluster size not exceed the number of sparse classifiers
         row_indices = torch.arange(
             min(col_indices.size(0), self.cluster_size)
-        ).repeat_interleave(self.sparsity).to(col_indices.device)
+        ).repeat_interleave(self.sparsity).to(self.device)
 
         # add progress bar to sparse encoding process
         # progress_bar = tqdm(
@@ -215,10 +217,12 @@ class RobustListLearner(nn.Module):
             [weight_slice.shape[0], self.sample_dim]
         )
         return ConditionalLinearModel(
-            predictor_weights=torch.sparse_coo_tensor(
-                indices,
-                weight_slice.flatten(),
-                size
+            predictor=LinearModel(
+                weights=torch.sparse_coo_tensor(
+                    indices,
+                    weight_slice.flatten(),
+                    size
+                )
             )
         )
 

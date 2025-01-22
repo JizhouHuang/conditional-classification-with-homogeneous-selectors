@@ -6,4 +6,5 @@ cluster_size: 65536
 data_frac_psgd: 0.67
 lr_coeff: 0.1
 num_iter: 16384
+# num_iter: 4
 batch_size: 64

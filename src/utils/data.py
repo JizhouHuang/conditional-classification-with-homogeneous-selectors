@@ -111,7 +111,7 @@ class TransformedDataset(Dataset):
     def __init__(
             self, 
             data: torch.Tensor, 
-            predictor: LinearModel = None
+            predictor: Any = None
         ):
         """
         Initialize the dataset with a label mapping.
@@ -158,7 +158,7 @@ class TransformedDataset(Dataset):
     
     def set_predictor(
             self,
-            predictor: LinearModel
+            predictor: Any
     ):
         self.predictor = predictor
         self.label_map()

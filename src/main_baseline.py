@@ -5,8 +5,9 @@ import torch
 from tqdm import tqdm
 import yaml
 from tabulate import tabulate
-from .experiments.experiment_ccsc import ExperimentCCSC
+from .experiments.experiment_baseline import ExperimentBaseline
 from .utils.data import UCIMedicalDataset
+from .models.baseline_learner import LogisticRegLearner, SVMLearner, RandomForestLearner, XGBoostLearner
 
 def main(data_name: str):
 
@@ -34,15 +35,15 @@ def main(data_name: str):
     attr_false = config['attr_false']
 
     num_experiment = 1
-    sparse_errs = torch.ones(num_experiment)
-    cond_errs_wo = torch.ones(num_experiment)
-    cond_errs = torch.ones(num_experiment)
-    coverages = torch.ones(num_experiment)
+    learners = [LogisticRegLearner, SVMLearner, RandomForestLearner, XGBoostLearner]
+    errs = torch.ones([num_experiment, len(learners)])
+    cond_errs = torch.ones([num_experiment, len(learners)])
+    coverages = torch.ones([num_experiment, len(learners)])
     header = "main -"
 
     for experiment_id in tqdm(range(num_experiment),desc=" ".join([header, "running experiments"])):
         # Initialize the experiment
-        experiment = ExperimentCCSC(
+        experiment = ExperimentBaseline(
             prev_header=header + ">",
             experiment_id=experiment_id, 
             config_file_path=config_file_path,
@@ -65,20 +66,22 @@ def main(data_name: str):
         )
 
         # Run the experiment
-        res = experiment(uci_data)
-
-        # Record the result error measures
-        sparse_errs[experiment_id] = res[0][1]
-        cond_errs_wo[experiment_id] = res[1][1]
-        cond_errs[experiment_id], coverages[experiment_id] = res[2][1]
+        errs[experiment_id], cond_errs[experiment_id], coverages[experiment_id] = experiment(uci_data, learners)
     
-    min_cond_err, min_cond_ind = torch.min(cond_errs, dim=0)
+    min_errs, _ = torch.min(errs, dim=0)
+    avg_errs = torch.mean(errs, dim=0)
+    min_cond_errs, min_cond_ids = torch.min(cond_errs, dim=0)
+    min_coverages = coverages[min_cond_ids, torch.arange(len(learners))]
+    avg_cond_errs = torch.mean(cond_errs, dim=0)
+    avg_coverages = torch.mean(coverages, dim=0)
     # Print the results in a table format
+
     table = [
-        ["Classifier Type", "Data", "Trials", "Min Est ER", "Min Coverage", "Avg Est ER", "Avg Coverage"],
-        ["Classic Sparse", data_name, num_experiment, torch.min(sparse_errs), 1, torch.mean(sparse_errs), 1],
-        ["Cond Sparse w/o Selector", data_name, num_experiment, cond_errs_wo[min_cond_ind], 1, torch.mean(cond_errs_wo), 1],
-        ["Cond Sparse", data_name, num_experiment, min_cond_err, coverages[min_cond_ind], torch.mean(cond_errs), torch.mean(coverages)]
+        ["Predictor Name", "Data", "Trials", "Min ER", "Avg ER", "Min CER", "Min Coverage", "Avg CER", "Avg Coverage"],
+        ["Logistic", data_name, num_experiment, min_errs[0], avg_errs[0], min_cond_errs[0], min_coverages[0], avg_cond_errs[0], avg_coverages[0]],
+        ["SVM", data_name, num_experiment, min_errs[1], avg_errs[1], min_cond_errs[1], min_coverages[1], avg_cond_errs[1], avg_coverages[1]],
+        ["Random ForestRandom Forest", data_name, num_experiment, min_errs[2], avg_errs[2], min_cond_errs[2], min_coverages[2], avg_cond_errs[2], avg_coverages[2]],
+        ["XGBoost", data_name, num_experiment, min_errs[3], avg_errs[3], min_cond_errs[3], min_coverages[3], avg_cond_errs[3], avg_coverages[3]]
     ]
     print(tabulate(table, headers="firstrow", tablefmt="grid"))
     

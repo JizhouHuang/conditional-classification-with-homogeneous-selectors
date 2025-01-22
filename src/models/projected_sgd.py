@@ -50,7 +50,7 @@ class SelectorPerceptron(nn.Module):
                 self.cluster_size, 
                 self.dim_sample
             ]
-        ).to(device) # [2, cluster_size, dim_sample]
+        ).to(device).squeeze() # [2, cluster_size, dim_sample]
 
         # record the conditional error of the corresponding best selectors
         self.min_error = torch.ones(
@@ -58,7 +58,7 @@ class SelectorPerceptron(nn.Module):
                 2,
                 self.cluster_size
             ]
-        ).to(device) # [2, cluster_size]
+        ).to(device).squeeze() # [2, cluster_size]
 
         # learning rate
         self.beta = lr_beta
@@ -83,14 +83,14 @@ class SelectorPerceptron(nn.Module):
             batch_size=len(dataset_val)
         )
 
-        init_weight = init_weight.repeat(self.cluster_size, 1)   # [cluster_size, dim_sample]
+        init_weight = init_weight.repeat(self.cluster_size, 1).squeeze()   # [cluster_size, dim_sample]
         self.projected_SGD(
             dataloader_train=dataloader_train,
             dataloader_val=dataloader_val,
             model=ConditionalLinearModel(
                 seletor_weights=torch.stack(
                     [init_weight, -init_weight]
-                ).to(self.device)   # [2, cluster_size, dim_sample]
+                )   # [2, cluster_size, dim_sample]
             )
         )
 
@@ -125,13 +125,13 @@ class SelectorPerceptron(nn.Module):
             max_iterations=self.num_iter
         )
         # enable to show progress bar
-        # for data in tqdm(
-        #     dataloader_fixed, 
-        #     total=dataloader_fixed.max_iterations, 
-        #     desc=self.header,
-        #     leave=False
-        # ):
-        for data in dataloader_fixed:
+        for data in tqdm(
+            dataloader_fixed, 
+            total=dataloader_fixed.max_iterations, 
+            desc=self.header,
+            leave=False
+        ):
+        # for data in dataloader_fixed:
             # labels:   [data_batch_size, cluster_size]
             # features: [data_batch_size, dim_sample]
             labels, features = data

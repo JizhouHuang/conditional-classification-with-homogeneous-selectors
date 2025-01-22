@@ -17,7 +17,8 @@ class ExperimentCCSC(nn.Module):
             self,
             prev_header: str,
             experiment_id: int,
-            config_file_path: str
+            config_file_path: str,
+            device: torch.device
     ):
         """
         Initialize through reading parameters from YAML file located under src/config/.
@@ -39,6 +40,7 @@ class ExperimentCCSC(nn.Module):
         """
         super(ExperimentCCSC, self).__init__()
         self.header = " ".join([prev_header, "experiment", str(experiment_id), "-"])
+        self.device = device
 
         # Read the YAML configuration file
         with open(config_file_path, 'r') as file:
@@ -83,12 +85,8 @@ class ExperimentCCSC(nn.Module):
             prev_header=self.header + ">",
             sparsity=self.sparsity, 
             margin=self.margin,
-            cluster_size=self.cluster_size
-        ).to(data_train.device)
-
-        rl_dataloader = DataLoader(
-            TransformedDataset(data_train),
-            batch_size=self.num_sample_rll
+            cluster_size=self.cluster_size,
+            device=self.device
         )
 
         sparse_classifier_clusters = robust_list_learner(
@@ -100,7 +98,7 @@ class ExperimentCCSC(nn.Module):
 
         table = [
             ["Algorithm", "Sample Size", "Sample Dimension", "Data Device", "Sparsity", "Margin", "Cluster Size", "Max Clusters"],
-            ["List Learning", min(self.num_sample_rll, data_train.size(0)), data_train.shape[1] - 1, data_train.device, min(data_train.shape[1] - 1, self.sparsity), self.margin, sparse_classifier_clusters[0].predictor.size(0), len(sparse_classifier_clusters)]
+            ["List Learning", min(self.num_sample_rll, data_train.size(0)), data_train.shape[1] - 1, self.device, min(data_train.shape[1] - 1, self.sparsity), self.margin, sparse_classifier_clusters[0].predictor.size(0), len(sparse_classifier_clusters)]
         ]
         print(tabulate(table, headers="firstrow", tablefmt="grid"))
 
@@ -113,12 +111,12 @@ class ExperimentCCSC(nn.Module):
             lr_coeff=self.lr_coeff, 
             sample_size_psgd=int(data_train.shape[0] * self.data_frac_psgd), 
             batch_size=self.batch_size,
-            device=data_train.device
+            device=self.device
         )
 
         table = [
             ["Algorithm", "Sample Size", "Sample Dimension", "Data Device", "Max Iterations", "LR Scaler", "Batch Size"],
-            ["Cond Classification", data_train.shape[0], data_train.shape[1] - 1, data_train.device, self.num_iter, self.lr_coeff, self.batch_size]
+            ["Cond Classification", data_train.shape[0], data_train.shape[1] - 1, self.device, self.num_iter, self.lr_coeff, self.batch_size]
         ]
 
         print(tabulate(table, headers="firstrow", tablefmt="grid"))

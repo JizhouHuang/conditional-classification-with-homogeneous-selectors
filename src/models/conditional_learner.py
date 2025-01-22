@@ -137,7 +137,7 @@ class ConditionalLearnerForFiniteClass(nn.Module):
 
         classifiers = ConditionalLinearModel(
             seletor_weights=candidate_selectors,
-            predictor_weights=candidate_classifiers
+            predictor=LinearModel(weights=candidate_classifiers)
         )
         _, min_ids = torch.min(
             classifiers.conditional_error_rate(
@@ -148,5 +148,5 @@ class ConditionalLearnerForFiniteClass(nn.Module):
         )
         return ConditionalLinearModel(
             seletor_weights=candidate_selectors[min_ids],
-            predictor_weights=candidate_classifiers[min_ids]
+            predictor=LinearModel(weights=candidate_classifiers[min_ids])
         )
