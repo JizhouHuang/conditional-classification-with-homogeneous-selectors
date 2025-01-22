@@ -19,8 +19,8 @@ def main(data_name: str):
     # Construct data file paths
     data_train_path = "".join(["src/data/", data_name, "_train.pkl"])
     data_test_path = "".join(["src/data/", data_name, "_test.pkl"])
-    # config_file_path = "".join(["src/config/model/", data_name, ".yaml"])
-    config_file_path = "src/config/model/model_toy.yaml"
+    config_file_path = "".join(["src/config/model/", data_name, ".yaml"])
+    # config_file_path = "src/config/model/model_toy.yaml"
 
     num_experiment = 100
     sparse_errs = torch.ones(num_experiment)
