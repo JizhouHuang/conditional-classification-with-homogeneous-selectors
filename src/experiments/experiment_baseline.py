@@ -143,12 +143,10 @@ class ExperimentBaseline(nn.Module):
                 X=data_test[:, 1:],
                 y=data_test[:, 0]
             )
-            print(errors.shape)
             tmp = cc.conditional_error_rate(
                 X=data_test[:, 1:],
                 y=data_test[:, 0]
             )
-            print(tmp)
             errors[i] = tmp
 
             coverages[i] = cc.selector.prediction_rate(X=data_test[:, 1:])

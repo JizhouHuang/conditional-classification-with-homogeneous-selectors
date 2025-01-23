@@ -19,8 +19,8 @@ def main(data_name: str):
     # Construct data file paths
     data_train_path = "".join(["src/data/", data_name, "_train.pkl"])
     data_test_path = "".join(["src/data/", data_name, "_test.pkl"])
-    # config_file_path = "".join(["src/config/model/", data_name, ".yaml"])
-    config_file_path = "src/config/model/model_toy.yaml"
+    config_file_path = "".join(["src/config/model/", data_name, ".yaml"])
+    # config_file_path = "src/config/model/model_toy.yaml"
 
     num_experiment = 100
     learners = [LogisticRegLearner, SVMLearner, RandomForestLearner, XGBoostLearner]
@@ -57,8 +57,8 @@ def main(data_name: str):
         # )
 
         errs[experiment_id], cond_errs[experiment_id], coverages[experiment_id] = experiment(
-            data_train[:min(1000, data_train.size(0))],
-            data_test[:min(1000, data_test.size(0))],
+            data_train[:min(10000, data_train.size(0))],
+            data_test[:min(10000, data_test.size(0))],
             learners
         )
     
