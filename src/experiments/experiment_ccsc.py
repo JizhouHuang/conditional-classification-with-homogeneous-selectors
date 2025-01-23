@@ -168,10 +168,10 @@ class ExperimentCCSC(nn.Module):
         
         # Print the results in a table format
         table = [
-            ["Classifier Type", "Sample Size", "Sample Dimension", "Classifier Sparsity", "Est Error Rate", "Coverage"],
-            ["Classic Sparse", data_test.shape[0], data_test.shape[1] - 1, self.sparsity, min_error, 1],
-            ["Cond Sparse w/o Selector", data_test.shape[0], data_test.shape[1] - 1, self.sparsity, error_wo, 1],
-            ["Cond Sparse", data_test.shape[0], data_test.shape[1] - 1, self.sparsity, error, coverage]
+            ["Classifier Type", "Sample Size", "Sample Dim", "Sparsity", "PSGD Iter", "Batch Size", "Est ER", "Coverage"],
+            ["Classic Sparse", data_test.shape[0], data_test.shape[1] - 1, self.sparsity, self.num_iter, self.batch_size, min_error, 1],
+            ["Cond Sparse w/o Selector", data_test.shape[0], data_test.shape[1] - 1, self.sparsity, self.num_iter, self.batch_size, error_wo, 1],
+            ["Cond Sparse", data_test.shape[0], data_test.shape[1] - 1, self.sparsity, self.num_iter, self.batch_size, error, coverage]
         ]
         print(tabulate(table, headers="firstrow", tablefmt="grid"))
 
