@@ -154,7 +154,7 @@ class TransformedDataset(Dataset):
                 y=self.data[:, 0]       # [data_batch_size]
             ).t()                       # [data_batch_size, cluster_size]
         else:
-            self.trans_labels = self.data[:, 0]
+            self.trans_labels = self.data[:, 0].bool()
     
     def set_predictor(
             self,
