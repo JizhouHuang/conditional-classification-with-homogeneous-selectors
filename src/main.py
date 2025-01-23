@@ -30,11 +30,11 @@ def main(data_name: str):
     coverages = torch.ones(num_experiment)
     header = "main -"
 
-    for experiment_id in tqdm(range(num_experiment),desc=" ".join([header, "running experiments"])):
+    for eid in tqdm(range(num_experiment),desc=" ".join([header, "running experiments"])):
         # Initialize the experiment
         experiment = ExperimentCCSC(
             prev_header=header + ">",
-            experiment_id=experiment_id, 
+            experiment_id=eid, 
             config_file_path=config_file_path,
             device=device
         )
@@ -57,19 +57,29 @@ def main(data_name: str):
         )
 
         # Record the result error measures
-        sparse_errs[experiment_id] = res[0][1]
-        cond_errs_wo[experiment_id] = res[1][1]
-        cond_errs[experiment_id], coverages[experiment_id] = res[2][1]
+        sparse_errs[eid] = res[0][1]
+        cond_errs_wo[eid] = res[1][1]
+        cond_errs[eid], coverages[eid] = res[2][1]
+
+        min_cond_err, min_cond_ind = torch.min(cond_errs[:eid + 1], dim=0)
+        # Print the results in a table format
+        table = [
+            ["Classifier Type", "Data", "Trials", "Min Est ER", "Min Coverage", "Avg Est ER", "Avg Coverage"],
+            ["Classic Sparse", data_name, eid + 1, torch.min(sparse_errs[:eid + 1]), 1, torch.mean(sparse_errs[:eid + 1]), 1],
+            ["Cond Sparse w/o Selector", data_name, eid + 1, cond_errs_wo[min_cond_ind], 1, torch.mean(cond_errs_wo[:eid + 1]), 1],
+            ["Cond Sparse", data_name, eid + 1, min_cond_err, coverages[min_cond_ind], torch.mean(cond_errs[:eid + 1]), torch.mean(coverages[:eid + 1])]
+        ]
+        print(tabulate(table, headers="firstrow", tablefmt="grid"))
     
-    min_cond_err, min_cond_ind = torch.min(cond_errs, dim=0)
-    # Print the results in a table format
-    table = [
-        ["Classifier Type", "Data", "Trials", "Min Est ER", "Min Coverage", "Avg Est ER", "Avg Coverage"],
-        ["Classic Sparse", data_name, num_experiment, torch.min(sparse_errs), 1, torch.mean(sparse_errs), 1],
-        ["Cond Sparse w/o Selector", data_name, num_experiment, cond_errs_wo[min_cond_ind], 1, torch.mean(cond_errs_wo), 1],
-        ["Cond Sparse", data_name, num_experiment, min_cond_err, coverages[min_cond_ind], torch.mean(cond_errs), torch.mean(coverages)]
-    ]
-    print(tabulate(table, headers="firstrow", tablefmt="grid"))
+    # min_cond_err, min_cond_ind = torch.min(cond_errs, dim=0)
+    # # Print the results in a table format
+    # table = [
+    #     ["Classifier Type", "Data", "Trials", "Min Est ER", "Min Coverage", "Avg Est ER", "Avg Coverage"],
+    #     ["Classic Sparse", data_name, num_experiment, torch.min(sparse_errs), 1, torch.mean(sparse_errs), 1],
+    #     ["Cond Sparse w/o Selector", data_name, num_experiment, cond_errs_wo[min_cond_ind], 1, torch.mean(cond_errs_wo), 1],
+    #     ["Cond Sparse", data_name, num_experiment, min_cond_err, coverages[min_cond_ind], torch.mean(cond_errs), torch.mean(coverages)]
+    # ]
+    # print(tabulate(table, headers="firstrow", tablefmt="grid"))
     
 
 if __name__ == "__main__":

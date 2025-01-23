@@ -96,11 +96,11 @@ class ExperimentCCSC(nn.Module):
             )
         )   # List[ConditionalLinearModel]
 
-        table = [
-            ["Algorithm", "Sample Size", "Sample Dimension", "Data Device", "Sparsity", "Margin", "Cluster Size", "Max Clusters"],
-            ["List Learning", min(self.num_sample_rll, data_train.size(0)), data_train.shape[1] - 1, self.device, min(data_train.shape[1] - 1, self.sparsity), self.margin, sparse_classifier_clusters[0].predictor.size(0), len(sparse_classifier_clusters)]
-        ]
-        print(tabulate(table, headers="firstrow", tablefmt="grid"))
+        # table = [
+        #     ["Algorithm", "Sample Size", "Sample Dimension", "Data Device", "Sparsity", "Margin", "Cluster Size", "Max Clusters"],
+        #     ["List Learning", min(self.num_sample_rll, data_train.size(0)), data_train.shape[1] - 1, self.device, min(data_train.shape[1] - 1, self.sparsity), self.margin, sparse_classifier_clusters[0].predictor.size(0), len(sparse_classifier_clusters)]
+        # ]
+        # print(tabulate(table, headers="firstrow", tablefmt="grid"))
 
         # Perform conditional learning
         print(" ".join([self.header, "initializing conditional classification learner for homogeneous halfspaces ..."]))
@@ -114,12 +114,12 @@ class ExperimentCCSC(nn.Module):
             device=self.device
         )
 
-        table = [
-            ["Algorithm", "Sample Size", "Sample Dimension", "Data Device", "Max Iterations", "LR Scaler", "Batch Size"],
-            ["Cond Classification", data_train.shape[0], data_train.shape[1] - 1, self.device, self.num_iter, self.lr_coeff, self.batch_size]
-        ]
+        # table = [
+        #     ["Algorithm", "Sample Size", "Sample Dimension", "Data Device", "Max Iterations", "LR Scaler", "Batch Size"],
+        #     ["Cond Classification", data_train.shape[0], data_train.shape[1] - 1, self.device, self.num_iter, self.lr_coeff, self.batch_size]
+        # ]
 
-        print(tabulate(table, headers="firstrow", tablefmt="grid"))
+        # print(tabulate(table, headers="firstrow", tablefmt="grid"))
 
         conditional_classifier = conditional_learner(
             dataset= TransformedDataset(data_train),
@@ -168,10 +168,10 @@ class ExperimentCCSC(nn.Module):
         
         # Print the results in a table format
         table = [
-            ["Classifier Type", "Test Sample Size", "Classifier Sparsity", "Est Error Rate", "Coverage"],
-            ["Classic Sparse", data_test.shape[0], self.sparsity, min_error, 1],
-            ["Cond Sparse w/o Selector", data_test.shape[0], self.sparsity, error_wo, 1],
-            ["Cond Sparse", data_test.shape[0], self.sparsity, error, coverage]
+            ["Classifier Type", "Sample Size", "Sample Dimension", "Classifier Sparsity", "Est Error Rate", "Coverage"],
+            ["Classic Sparse", data_test.shape[0], data_test.shape[1] - 1, self.sparsity, min_error, 1],
+            ["Cond Sparse w/o Selector", data_test.shape[0], data_test.shape[1] - 1, self.sparsity, error_wo, 1],
+            ["Cond Sparse", data_test.shape[0], data_test.shape[1] - 1, self.sparsity, error, coverage]
         ]
         print(tabulate(table, headers="firstrow", tablefmt="grid"))
 

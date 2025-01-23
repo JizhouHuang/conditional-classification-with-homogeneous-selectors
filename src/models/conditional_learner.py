@@ -92,13 +92,14 @@ class ConditionalLearnerForFiniteClass(nn.Module):
         # initialize evaluation dataset for conditional learner
         labels_eval, features_eval = dataset[:]
 
-        for i, classifiers in enumerate(
-            tqdm(
-                classifier_clusters, 
-                desc=self.header,
-                # leave=False
-            )
-        ):
+        # for i, classifiers in enumerate(
+        #     tqdm(
+        #         classifier_clusters, 
+        #         desc=self.header,
+        #         # leave=False
+        #     )
+        # ):
+        for i, classifiers in enumerate(classifier_clusters):
             dataset.set_predictor(
                 predictor=classifiers.predictor
             )
