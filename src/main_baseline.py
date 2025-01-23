@@ -1,18 +1,18 @@
 import os
 import argparse
-os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+# os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 import torch
 import pandas as pd
 from tqdm import tqdm
 from tabulate import tabulate
 from .experiments.experiment_baseline import ExperimentBaseline
-from .utils.data import UCIMedicalDataset
 from .models.baseline_learner import LogisticRegLearner, SVMLearner, RandomForestLearner, XGBoostLearner
 
 def main(data_name: str):
 
     # Check if GPU is available
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cpu')
     print(f"Using device: {device}")
 
     # Datasets: diabetes, haberman, hepatitis, hypothyroid, wdbc
@@ -24,18 +24,19 @@ def main(data_name: str):
     # config_file_path = "src/config/model/model_toy.yaml"
 
     num_experiment = 100
-    learners = [LogisticRegLearner, SVMLearner, RandomForestLearner, XGBoostLearner]
-    errs = torch.ones([num_experiment, len(learners)])
-    cond_errs = torch.ones([num_experiment, len(learners)])
-    coverages = torch.ones([num_experiment, len(learners)])
+    learner_classes = [LogisticRegLearner, SVMLearner, RandomForestLearner, XGBoostLearner]
+    errs = torch.ones([num_experiment, len(learner_classes)])
+    cond_errs = torch.ones([num_experiment, len(learner_classes)])
+    coverages = torch.ones([num_experiment, len(learner_classes)])
     header = "main -"
 
-    for experiment_id in tqdm(range(num_experiment),desc=" ".join([header, "running experiments"])):
+    for eid in tqdm(range(num_experiment),desc=" ".join([header, "running experiments"])):
         # Initialize the experiment
         experiment = ExperimentBaseline(
             prev_header=header + ">",
-            experiment_id=experiment_id, 
+            experiment_id=eid, 
             config_file_path=config_file_path,
+            learner_classes=learner_classes,
             device=device
         )
 
@@ -51,28 +52,27 @@ def main(data_name: str):
         ).to(device)
 
         # Run the experiment
-        errs[experiment_id], cond_errs[experiment_id], coverages[experiment_id] = experiment(
-            data_train[:min(10000, data_train.size(0))],
-            data_test[:min(10000, data_test.size(0))],
-            learners
+        errs[eid], cond_errs[eid], coverages[eid] = experiment(
+            data_train[:min(50000, data_train.size(0))].share_memory_(),
+            data_test[:min(50000, data_test.size(0))]
         )
     
-    min_errs, _ = torch.min(errs, dim=0)
-    avg_errs = torch.mean(errs, dim=0)
-    min_cond_errs, min_cond_ids = torch.min(cond_errs, dim=0)
-    min_coverages = coverages[min_cond_ids, torch.arange(len(learners))]
-    avg_cond_errs = torch.mean(cond_errs, dim=0)
-    avg_coverages = torch.mean(coverages, dim=0)
-    # Print the results in a table format
+        min_errs, _ = torch.min(errs[:eid + 1], dim=0)
+        avg_errs = torch.mean(errs[:eid + 1], dim=0)
+        min_cond_errs, min_cond_ids = torch.min(cond_errs[:eid + 1], dim=0)
+        min_coverages = coverages[min_cond_ids, torch.arange(len(learner_classes))]
+        avg_cond_errs = torch.mean(cond_errs[:eid + 1], dim=0)
+        avg_coverages = torch.mean(coverages[:eid + 1], dim=0)
+        # Print the results in a table format
 
-    table = [
-        ["Predictor Name", "Data", "Trials", "Min ER", "Avg ER", "Min CER", "Min Coverage", "Avg CER", "Avg Coverage"],
-        ["Logistic", data_name, num_experiment, min_errs[0], avg_errs[0], min_cond_errs[0], min_coverages[0], avg_cond_errs[0], avg_coverages[0]],
-        ["SVM", data_name, num_experiment, min_errs[1], avg_errs[1], min_cond_errs[1], min_coverages[1], avg_cond_errs[1], avg_coverages[1]],
-        ["Random ForestRandom Forest", data_name, num_experiment, min_errs[2], avg_errs[2], min_cond_errs[2], min_coverages[2], avg_cond_errs[2], avg_coverages[2]],
-        ["XGBoost", data_name, num_experiment, min_errs[3], avg_errs[3], min_cond_errs[3], min_coverages[3], avg_cond_errs[3], avg_coverages[3]]
-    ]
-    print(tabulate(table, headers="firstrow", tablefmt="grid"))
+        table = [
+            ["Predictor Name", "Data", "Trials", "Min ER", "Avg ER", "Min CER", "Min Coverage", "Avg CER", "Avg Coverage"],
+            ["Logistic", data_name, eid + 1, min_errs[0], avg_errs[0], min_cond_errs[0], min_coverages[0], avg_cond_errs[0], avg_coverages[0]],
+            ["SVM", data_name, eid + 1, min_errs[1], avg_errs[1], min_cond_errs[1], min_coverages[1], avg_cond_errs[1], avg_coverages[1]],
+            ["Random ForestRandom Forest", data_name, eid + 1, min_errs[2], avg_errs[2], min_cond_errs[2], min_coverages[2], avg_cond_errs[2], avg_coverages[2]],
+            ["XGBoost", data_name, eid + 1, min_errs[3], avg_errs[3], min_cond_errs[3], min_coverages[3], avg_cond_errs[3], avg_coverages[3]]
+        ]
+        print(tabulate(table, headers="firstrow", tablefmt="grid"))
     
 
 if __name__ == "__main__":

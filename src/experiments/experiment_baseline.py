@@ -1,12 +1,14 @@
 import torch
 import torch.nn as nn
+import multiprocessing as mp
 import yaml
-from typing import List, Any
+from joblib import Parallel, delayed
+from typing import List, Any, Callable
 from tqdm import tqdm
 from tabulate import tabulate
 from torch.utils.data import DataLoader, random_split
 from ..utils.data import TransformedDataset
-from ..utils.simple_models import ConditionalLinearModel
+from ..utils.simple_models import ConditionalLinearModel, PredictiveModel
 from ..models.projected_sgd import SelectorPerceptron
 
 class ExperimentBaseline(nn.Module):
@@ -18,6 +20,7 @@ class ExperimentBaseline(nn.Module):
             prev_header: str,
             experiment_id: int,
             config_file_path: str,
+            learner_classes: List[Any],
             device: torch.device
     ):
         """
@@ -39,6 +42,7 @@ class ExperimentBaseline(nn.Module):
         super(ExperimentBaseline, self).__init__()
         self.header = " ".join([prev_header, "experiment", str(experiment_id), "-"])
         self.device = device
+        self.predictors = [lc() for lc in learner_classes]
 
         # Read the YAML configuration file
         with open(config_file_path, 'r') as file:
@@ -55,8 +59,7 @@ class ExperimentBaseline(nn.Module):
     def forward(
             self,
             data_train: torch.Tensor,
-            data_test: torch.Tensor,
-            learners: List[Any]
+            data_test: torch.Tensor
     ) -> List[List[torch.Tensor]]:
         """
         Call Robust List Learner to generate a list of sparse classifiers and input them to the Conditional Learner.
@@ -68,24 +71,19 @@ class ExperimentBaseline(nn.Module):
         """
         # Learn the sparse classifiers
         print(" ".join([self.header, "initializing baseline learners ..."]))
+        
+        dloader = DataLoader(
+            TransformedDataset(data_train),
+            batch_size=data_train.size(0)
+        )
+        for pred in self.predictors:
+            pred.train(dloader)
 
-        predictors = []
-
-        for learner in tqdm(learners, desc=f"{self.header} learning predictors"):
-            predictors.append(
-                learner(
-                    DataLoader(
-                        TransformedDataset(data_train),
-                        batch_size=data_train.size(0)
-                    ),
-                )
-            )
-
-        table = [
-            ["Algorithm", "Sample Size", "Sample Dimension", "Data Device", "Number of Predictors"],
-            ["Fit Learners", min(self.num_sample_rll, data_train.size(0)), data_train.shape[1] - 1, len(predictors)]
-        ]
-        print(tabulate(table, headers="firstrow", tablefmt="grid"))
+        # table = [
+        #     ["Algorithm", "Sample Size", "Sample Dimension", "Data Device", "Number of Predictors"],
+        #     ["Fit Learners", min(self.num_sample_rll, data_train.size(0)), data_train.shape[1] - 1, len(self.predictors)]
+        # ]
+        # print(tabulate(table, headers="firstrow", tablefmt="grid"))
 
         # Perform conditional learning
         print(" ".join([self.header, "starting conditional classification for homogeneous halfspaces ..."]))
@@ -106,7 +104,9 @@ class ExperimentBaseline(nn.Module):
             device=self.device
         )
         init_weight = init_weight / torch.norm(init_weight, p=2)
-        for pred in tqdm(predictors, desc=f"{self.header} learning selectors"):
+        # print(f"{self.header} learning seletors ...")
+        # for pred in tqdm(self.predictors, desc=f"{self.header} learning selectors"):
+        for pred in self.predictors:
             dataset.set_predictor(predictor=pred)
             dataset_train, dataset_val = random_split(
                 dataset,
@@ -154,12 +154,12 @@ class ExperimentBaseline(nn.Module):
         res = (error_wo,  errors, coverages)
         
         # Print the results in a table format
-        table = [
-            ["Predictor Name", "Logistic", "SVM", "Random Forest", "XGBoost"],
-            ["Classification Error"] + error_wo.tolist(),
-            ["Cond SClassification Error"] + errors.tolist(),
-            ["Coverage"] + coverages.tolist()
-        ]
-        print(tabulate(table, headers="firstrow", tablefmt="grid"))
+        # table = [
+        #     ["Predictor Name", "Logistic", "SVM", "Random Forest", "XGBoost"],
+        #     ["Classification Error"] + error_wo.tolist(),
+        #     ["Cond SClassification Error"] + errors.tolist(),
+        #     ["Coverage"] + coverages.tolist()
+        # ]
+        # print(tabulate(table, headers="firstrow", tablefmt="grid"))
 
         return res

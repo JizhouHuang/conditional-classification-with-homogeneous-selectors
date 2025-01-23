@@ -183,13 +183,11 @@ class PredictiveModel(nn.Module):
     
     def train(
             self,
-            model: Any,
             dataloader: DataLoader
-    ) -> Any:
-        if hasattr(model, "fit"):
+    ) -> None:
+        if hasattr(self.model, "fit"):
             labels, features = next(iter(dataloader))
-            model.fit(features.cpu().numpy(), labels.cpu().numpy())
-            return model
+            self.model.fit(features.cpu().numpy(), labels.cpu().numpy())
     
     def errors(
             self,
