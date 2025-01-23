@@ -1,8 +1,8 @@
-num_sample_rll: 54
+num_sample_rll: 128
 margin: 0.0001
-sparsity: 3
-cluster_size: 131072
+sparsity: 2
+cluster_size: 65536
 data_frac_psgd: 0.67
-lr_coeff: 0.5
-num_iter: 4096
+lr_coeff: 0.25
+num_iter: 8192
 batch_size: 128
