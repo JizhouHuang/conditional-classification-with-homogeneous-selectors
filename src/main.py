@@ -19,10 +19,9 @@ def main(data_name: str):
     # Construct data file paths
     data_train_path = "".join(["src/data/csv/", data_name, "_train.csv"])
     data_test_path = "".join(["src/data/csv/", data_name, "_test.csv"])
-    # data_train_path = "".join(["src/data/", data_name, "_train.pkl"])
-    # data_test_path = "".join(["src/data/", data_name, "_test.pkl"])
-    # config_file_path = "".join(["src/config/model/", data_name, ".yaml"])
-    config_file_path = "src/config/model/model_toy.yaml"
+
+    config_file_path = "".join(["src/config/model/", data_name, ".yaml"])
+    # config_file_path = "src/config/model/model_toy.yaml"
 
     num_experiment = 1
     sparse_errs = torch.ones(num_experiment)
@@ -53,13 +52,9 @@ def main(data_name: str):
 
         # Run the experiment
         res = experiment(
-            data_train[:min(1000, data_train.size(0))],
-            data_test[:min(1000, data_test.size(0))]
+            data_train[:min(20000, data_train.size(0))],
+            data_test[:min(20000, data_test.size(0))]
         )
-        # res = experiment(
-        #     data_train,
-        #     data_test
-        # )
 
         # Record the result error measures
         sparse_errs[experiment_id] = res[0][1]

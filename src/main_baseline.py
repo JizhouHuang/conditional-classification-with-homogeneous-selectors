@@ -19,6 +19,7 @@ def main(data_name: str):
     # Construct data file paths
     data_train_path = "".join(["src/data/", data_name, "_train.pkl"])
     data_test_path = "".join(["src/data/", data_name, "_test.pkl"])
+
     config_file_path = "".join(["src/config/model/", data_name, ".yaml"])
     # config_file_path = "src/config/model/model_toy.yaml"
 
@@ -50,12 +51,6 @@ def main(data_name: str):
         ).to(device)
 
         # Run the experiment
-        # errs[experiment_id], cond_errs[experiment_id], coverages[experiment_id] = experiment(
-        #     data_train, 
-        #     data_test, 
-        #     learners
-        # )
-
         errs[experiment_id], cond_errs[experiment_id], coverages[experiment_id] = experiment(
             data_train[:min(10000, data_train.size(0))],
             data_test[:min(10000, data_test.size(0))],

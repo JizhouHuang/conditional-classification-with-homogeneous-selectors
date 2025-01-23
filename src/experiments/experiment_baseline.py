@@ -1,11 +1,11 @@
 import torch
 import torch.nn as nn
 import yaml
-from typing import Union, Tuple, List, Any
+from typing import List, Any
 from tqdm import tqdm
 from tabulate import tabulate
 from torch.utils.data import DataLoader, random_split
-from ..utils.data import TransformedDataset, UCIMedicalDataset
+from ..utils.data import TransformedDataset
 from ..utils.simple_models import ConditionalLinearModel
 from ..models.projected_sgd import SelectorPerceptron
 

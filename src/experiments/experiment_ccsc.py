@@ -5,7 +5,7 @@ from typing import Union, Tuple, List
 from tqdm import tqdm
 from tabulate import tabulate
 from torch.utils.data import DataLoader
-from ..utils.data import TransformedDataset, UCIMedicalDataset
+from ..utils.data import TransformedDataset
 from ..models.conditional_learner import ConditionalLearnerForFiniteClass
 from ..models.robust_list_learner import RobustListLearner
 

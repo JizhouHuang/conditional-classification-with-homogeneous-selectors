@@ -125,13 +125,13 @@ class SelectorPerceptron(nn.Module):
             max_iterations=self.num_iter
         )
         # enable to show progress bar
-        for data in tqdm(
-            dataloader_fixed, 
-            total=dataloader_fixed.max_iterations, 
-            desc=self.header,
-            leave=False
-        ):
-        # for data in dataloader_fixed:
+        # for data in tqdm(
+        #     dataloader_fixed, 
+        #     total=dataloader_fixed.max_iterations, 
+        #     desc=self.header,
+        #     leave=False
+        # ):
+        for data in dataloader_fixed:
             # labels:   [data_batch_size, cluster_size]
             # features: [data_batch_size, dim_sample]
             labels, features = data
