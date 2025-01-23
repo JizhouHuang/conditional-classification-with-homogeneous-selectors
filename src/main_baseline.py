@@ -17,8 +17,8 @@ def main(data_name: str):
 
     # Datasets: diabetes, haberman, hepatitis, hypothyroid, wdbc
     # Construct data file paths
-    data_train_path = "".join(["src/data/", data_name, "_train.pkl"])
-    data_test_path = "".join(["src/data/", data_name, "_test.pkl"])
+    data_train_path = "".join(["src/data/csv/", data_name, "_train.csv"])
+    data_test_path = "".join(["src/data/csv/", data_name, "_test.csv"])
 
     config_file_path = "".join(["src/config/model/", data_name, ".yaml"])
     # config_file_path = "src/config/model/model_toy.yaml"
@@ -42,12 +42,12 @@ def main(data_name: str):
 
         # Load the data
         data_train = torch.tensor(
-            pd.read_pickle(data_train_path).to_numpy(), 
+            pd.read_csv(data_train_path).to_numpy(), 
             dtype=torch.float32
         ).to(device)
 
         data_test = torch.tensor(
-            pd.read_pickle(data_test_path).to_numpy(), 
+            pd.read_csv(data_test_path).to_numpy(), 
             dtype=torch.float32
         ).to(device)
 
