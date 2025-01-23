@@ -6,7 +6,6 @@ import pandas as pd
 from tqdm import tqdm
 from tabulate import tabulate
 from .experiments.experiment_ccsc import ExperimentCCSC
-from .utils.data import UCIMedicalDataset
 
 def main(data_name: str):
 
