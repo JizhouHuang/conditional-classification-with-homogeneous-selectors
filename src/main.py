@@ -29,7 +29,8 @@ def main(data_name: str):
     coverages = torch.ones(num_experiment)
     header = "main -"
 
-    for eid in tqdm(range(num_experiment),desc=" ".join([header, "running experiments"])):
+    # for eid in tqdm(range(num_experiment),desc=" ".join([header, "running experiments"])):
+    for eid in range(num_experiment):
         # Initialize the experiment
         experiment = ExperimentCCSC(
             prev_header=header + ">",

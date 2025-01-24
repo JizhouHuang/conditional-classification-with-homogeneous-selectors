@@ -37,8 +37,9 @@ def main(data_name: str):
     num_train_sample = min(num_sub_sample, len(df_train))
     df_test = pd.read_csv(data_test_path)
     num_test_sample = min(num_sub_sample, len(df_test))
-
-    for eid in tqdm(range(num_experiment),desc=" ".join([header, "running experiments"])):
+    
+    # for eid in tqdm(range(num_experiment),desc=" ".join([header, "running experiments"])):
+    for eid in range(num_experiment):
         # Initialize the experiment
         experiment = ExperimentBaseline(
             prev_header=header + ">",
