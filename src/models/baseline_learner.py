@@ -9,32 +9,36 @@ from ..utils.simple_models import PredictiveModel
 class LogisticRegLearner(PredictiveModel):
     def __init__(
             self,
+            max_data_train: int = 50000,
             device: torch.device = torch.device('cpu')
         ):
 
         # Initialize the logistic regression model
-        super().__init__(LogisticRegression(), device)
+        super().__init__(LogisticRegression(max_iter=2000), max_data_train, device)
 
 class SVMLearner(PredictiveModel):
     def __init__(
-            self, 
+            self,
+            max_data_train: int = 10000, 
             device: torch.device = torch.device('cpu')
     ):
 
-        super().__init__(SVC(kernel='linear'), device)
+        super().__init__(SVC(kernel='linear'), max_data_train, device)
 
 class RandomForestLearner(PredictiveModel):
     def __init__(
-            self, 
+            self,
+            max_data_train: int = 50000, 
             device: torch.device = torch.device('cpu')
     ):
         
-        super().__init__(RandomForestClassifier(n_estimators=100), device)
+        super().__init__(RandomForestClassifier(n_estimators=100), max_data_train, device)
 
 class XGBoostLearner(PredictiveModel):
     def __init__(
-            self, 
+            self,
+            max_data_train: int = 50000, 
             device: torch.device = torch.device('cpu')
     ):
 
-        super().__init__(xgb.XGBClassifier(), device)
+        super().__init__(xgb.XGBClassifier(), max_data_train, device)

@@ -175,10 +175,12 @@ class PredictiveModel(nn.Module):
     def __init__(
             self,
             model: Any,     # any sklearn model
+            max_data_train: int,
             device: torch.device
     ):
         super(PredictiveModel, self).__init__()
         self.model = model
+        self.max_data_train = max_data_train
         self.device = device
     
     def train(
@@ -187,7 +189,13 @@ class PredictiveModel(nn.Module):
     ) -> None:
         if hasattr(self.model, "fit"):
             labels, features = next(iter(dataloader))
-            self.model.fit(features.cpu().numpy(), labels.cpu().numpy())
+            print(f"features shape: {features.shape}")
+            cutoff = min(labels.size(0), self.max_data_train)
+            print(f"cutoff index: {cutoff}")
+            self.model.fit(
+                features[:cutoff].cpu().numpy(), 
+                labels[:cutoff].cpu().numpy()
+            )
     
     def errors(
             self,

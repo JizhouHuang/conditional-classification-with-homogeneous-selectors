@@ -76,7 +76,7 @@ class ExperimentBaseline(nn.Module):
             TransformedDataset(data_train),
             batch_size=data_train.size(0)
         )
-        for pred in self.predictors:
+        for pred in tqdm(self.predictors, desc=f"{self.header} learning predictors"):
             pred.train(dloader)
 
         # table = [
@@ -105,8 +105,8 @@ class ExperimentBaseline(nn.Module):
         )
         init_weight = init_weight / torch.norm(init_weight, p=2)
         # print(f"{self.header} learning seletors ...")
-        # for pred in tqdm(self.predictors, desc=f"{self.header} learning selectors"):
-        for pred in self.predictors:
+        for pred in tqdm(self.predictors, desc=f"{self.header} learning selectors"):
+        # for pred in self.predictors:
             dataset.set_predictor(predictor=pred)
             dataset_train, dataset_val = random_split(
                 dataset,

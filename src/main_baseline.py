@@ -23,12 +23,20 @@ def main(data_name: str):
     config_file_path = "".join(["src/config/model/", data_name, ".yaml"])
     # config_file_path = "src/config/model/model_toy.yaml"
 
-    num_experiment = 100
+    num_experiment = 1
     learner_classes = [LogisticRegLearner, SVMLearner, RandomForestLearner, XGBoostLearner]
+    
     errs = torch.ones([num_experiment, len(learner_classes)])
     cond_errs = torch.ones([num_experiment, len(learner_classes)])
     coverages = torch.ones([num_experiment, len(learner_classes)])
     header = "main -"
+
+    # read data
+    num_sub_sample = 50000
+    df_train = pd.read_csv(data_train_path)
+    num_train_sample = min(num_sub_sample, len(df_train))
+    df_test = pd.read_csv(data_test_path)
+    num_test_sample = min(num_sub_sample, len(df_test))
 
     for eid in tqdm(range(num_experiment),desc=" ".join([header, "running experiments"])):
         # Initialize the experiment
@@ -40,21 +48,21 @@ def main(data_name: str):
             device=device
         )
 
-        # Load the data
+        # sub-sample and convert the data
         data_train = torch.tensor(
-            pd.read_csv(data_train_path).to_numpy(), 
+            df_train.sample(n=num_train_sample).to_numpy(), 
             dtype=torch.float32
         ).to(device)
 
         data_test = torch.tensor(
-            pd.read_csv(data_test_path).to_numpy(), 
+            df_test.sample(n=num_test_sample).to_numpy(), 
             dtype=torch.float32
         ).to(device)
 
         # Run the experiment
         errs[eid], cond_errs[eid], coverages[eid] = experiment(
-            data_train[:min(50000, data_train.size(0))].share_memory_(),
-            data_test[:min(50000, data_test.size(0))]
+            data_train,
+            data_test
         )
     
         min_errs, _ = torch.min(errs[:eid + 1], dim=0)
