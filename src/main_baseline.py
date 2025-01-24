@@ -23,7 +23,7 @@ def main(data_name: str):
     config_file_path = "".join(["src/config/model/", data_name, ".yaml"])
     # config_file_path = "src/config/model/model_toy.yaml"
 
-    num_experiment = 1
+    num_experiment = 100
     learner_classes = [LogisticRegLearner, SVMLearner, RandomForestLearner, XGBoostLearner]
     
     errs = torch.ones([num_experiment, len(learner_classes)])
