@@ -189,9 +189,7 @@ class PredictiveModel(nn.Module):
     ) -> None:
         if hasattr(self.model, "fit"):
             labels, features = next(iter(dataloader))
-            print(f"features shape: {features.shape}")
             cutoff = min(labels.size(0), self.max_data_train)
-            print(f"cutoff index: {cutoff}")
             self.model.fit(
                 features[:cutoff].cpu().numpy(), 
                 labels[:cutoff].cpu().numpy()
