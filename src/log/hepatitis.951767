@@ -1,0 +1,2 @@
+Using device: cuda
+main - running experiments:   0%|          | 0/100 [00:00<?, ?it/s]main - running experiments:   1%|          | 1/100 [1:01:09<100:55:23, 3669.93s/it]main - running experiments:   2%|▏         | 2/100 [2:02:15<99:49:59, 3667.34s/it] main - running experiments:   3%|▎         | 3/100 [3:03:21<98:47:52, 3666.73s/it]main - running experiments:   4%|▍         | 4/100 [4:04:26<97:45:59, 3666.24s/it]main - running experiments:   5%|▌         | 5/100 [5:05:32<96:44:27, 3665.98s/it]
