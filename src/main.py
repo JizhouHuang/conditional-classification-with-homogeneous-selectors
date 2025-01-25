@@ -64,8 +64,7 @@ def main(data_name: str):
         cond_errs[eid], coverages[eid] = res[2][1]
         cond_svm_errs[eid], _ = res[3][1]
 
-        print(cond_errs)
-        print(cond_svm_errs)
+        print(f"{header} printing error statistics ...")
         # Print the results in a table format
         table = [
             ["Classifier Type", "Data", "Trials", "Min ER", "Min Cover", "Med ER", "Med Cover", "95th ER", "95th Cover", "Avg ER", "Avg Cover", "95th Avg ER", "95th Avg ER"],
@@ -75,6 +74,8 @@ def main(data_name: str):
             get_statistics("Cond Sparse", data_name, eid + 1, cond_svm_errs[:eid + 1], coverages[:eid + 1])
         ]
         print(tabulate(table, headers="firstrow", tablefmt="grid"))
+    
+
     
 def get_statistics(
         classifier: str,
@@ -98,7 +99,6 @@ def get_statistics(
 
     # 95th quantile err
     nfq_err = torch.quantile(sorted_err, q=0.95, interpolation='lower')
-    print(sorted_err, nfq_err)
 
     # average err
     avg_err = torch.mean(errors)
@@ -107,7 +107,7 @@ def get_statistics(
     nfq_err_ids = torch.where(sorted_err == nfq_err)[0]
     if nfq_err_ids.size(0) > 1:
         nfq_err_ids = nfq_err_ids[0]
-    print(nfq_err_ids)
+
     nf_avg_err = torch.mean(sorted_err[:nfq_err_ids + 1])
 
     # compute coverages
