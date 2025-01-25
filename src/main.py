@@ -71,7 +71,7 @@ def main(data_name: str):
             get_statistics("Classic Sparse", data_name, eid + 1, sparse_errs[:eid + 1]),
             get_statistics("Cond Sparse w/o Selector", data_name, eid + 1, cond_errs_wo[:eid + 1]),
             get_statistics("Cond Sparse", data_name, eid + 1, cond_errs[:eid + 1], coverages[:eid + 1]),
-            get_statistics("Cond Sparse", data_name, eid + 1, cond_svm_errs[:eid + 1], coverages[:eid + 1])
+            get_statistics("Cond SVM", data_name, eid + 1, cond_svm_errs[:eid + 1], coverages[:eid + 1])
         ]
         print(tabulate(table, headers="firstrow", tablefmt="grid"))
     
