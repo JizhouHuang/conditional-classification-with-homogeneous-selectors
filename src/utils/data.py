@@ -24,10 +24,11 @@ class TransformedDataset(Dataset):
                                 take the classifier(s) and the feature in the form of torch.Tensor as
                                 inputs, then outputs a label in the form of torch.Tensor.
         """
+        self.data = data
+
         if shuffle:
             self.data = data[torch.randperm(data.size(0))]
-        else:
-            self.data = data
+            
         self.trans_labels = None
         self.predictor = predictor
         self.label_map()

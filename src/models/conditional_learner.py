@@ -95,7 +95,7 @@ class ConditionalLearnerForFiniteClass(nn.Module):
         # for i, classifiers in enumerate(
         #     tqdm(
         #         classifier_clusters, 
-        #         desc=self.header,
+        #         desc=f"{self.header} learning selectors",
         #         # leave=False
         #     )
         # ):

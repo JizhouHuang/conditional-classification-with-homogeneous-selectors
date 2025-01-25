@@ -19,7 +19,7 @@ class LogisticRegLearner(PredictiveModel):
 class SVMLearner(PredictiveModel):
     def __init__(
             self,
-            max_data_train: int = 10000, 
+            max_data_train: int = 50000, 
             device: torch.device = torch.device('cpu')
     ):
 

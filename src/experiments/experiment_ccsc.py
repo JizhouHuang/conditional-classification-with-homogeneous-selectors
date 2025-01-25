@@ -99,11 +99,6 @@ class ExperimentCCSC(nn.Module):
             )
         )   # List[ConditionalLinearModel]
 
-        # table = [
-        #     ["Algorithm", "Sample Size", "Sample Dimension", "Data Device", "Sparsity", "Margin", "Cluster Size", "Max Clusters"],
-        #     ["List Learning", min(self.num_sample_rll, data_train.size(0)), data_train.shape[1] - 1, self.device, min(data_train.shape[1] - 1, self.sparsity), self.margin, sparse_classifier_clusters[0].predictor.size(0), len(sparse_classifier_clusters)]
-        # ]
-        # print(tabulate(table, headers="firstrow", tablefmt="grid"))
 
         # Perform conditional learning
         print(" ".join([self.header, "initializing conditional classification learner for homogeneous halfspaces ..."]))
@@ -116,13 +111,6 @@ class ExperimentCCSC(nn.Module):
             batch_size=self.batch_size,
             device=self.device
         )
-
-        # table = [
-        #     ["Algorithm", "Sample Size", "Sample Dimension", "Data Device", "Max Iterations", "LR Scaler", "Batch Size"],
-        #     ["Cond Classification", data_train.shape[0], data_train.shape[1] - 1, self.device, self.num_iter, self.lr_coeff, self.batch_size]
-        # ]
-
-        # print(tabulate(table, headers="firstrow", tablefmt="grid"))
 
         conditional_classifier: ConditionalLinearModel = conditional_learner(
             dataset = TransformedDataset(data_train),
