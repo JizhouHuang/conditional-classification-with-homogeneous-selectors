@@ -4,5 +4,5 @@ sparsity: 3
 cluster_size: 32768
 data_frac_psgd: 0.67
 lr_coeff: 0.25
-num_iter: 8192
-batch_size: 256
+num_iter: 16384
+batch_size: 1024

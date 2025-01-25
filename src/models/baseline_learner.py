@@ -23,7 +23,11 @@ class SVMLearner(PredictiveModel):
             device: torch.device = torch.device('cpu')
     ):
 
-        super().__init__(SVC(kernel='linear'), max_data_train, device)
+        super().__init__(
+            model=SVC(kernel='linear'), 
+            max_data_train=max_data_train, 
+            device=device
+        )
 
 class RandomForestLearner(PredictiveModel):
     def __init__(

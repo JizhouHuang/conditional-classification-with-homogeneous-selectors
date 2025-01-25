@@ -12,7 +12,6 @@ def main(data_name: str):
 
     # Check if GPU is available
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    device = torch.device('cpu')
     print(f"Using device: {device}")
 
     # Datasets: diabetes, haberman, hepatitis, hypothyroid, wdbc

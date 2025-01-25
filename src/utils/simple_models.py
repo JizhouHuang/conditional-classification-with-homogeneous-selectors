@@ -4,18 +4,6 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from sklearn.metrics import accuracy_score
 
-def PredictWithTensor(
-        classifier: torch.Tensor,
-        data: torch.Tensor
-) -> torch.Tensor:
-    return torch.matmul(classifier, data) > 0
-
-def PredictWithSparseTensor(
-        classifier: torch.sparse.FloatTensor,
-        data: torch.Tensor
-) -> torch.Tensor:
-    return torch.sparse.mm(classifier, data) > 0
-
 MIN_BOOL_ERROR = 0.1
 
 class LinearModel(nn.Module):
@@ -24,8 +12,8 @@ class LinearModel(nn.Module):
             weights: Union[torch.Tensor, torch.sparse.FloatTensor]  # Float [N1, N2, ..., N(k - 1), d]
     ):
         super(LinearModel, self).__init__()
-        self.weights = weights
-        self.device = weights.device
+        self.weights: torch.Tensor = weights
+        self.device: torch.device = weights.device
 
     def forward(
             self,
@@ -67,7 +55,7 @@ class LinearModel(nn.Module):
     ) -> torch.Tensor:          # Boolean   [N1, N2, ..., N(k - 1), m]
         return torch.logical_and(
             self.predict(X=X),  # Boolean   [N1, N2, ..., N(k - 1), m]
-            y                   # Boolean   [N1, N2, ..., N(k - 1), m]
+            y.bool()            # Boolean   [N1, N2, ..., N(k - 1), m]
         )
     
     def accuracy(
@@ -87,7 +75,7 @@ class LinearModel(nn.Module):
     ) -> torch.Tensor:          # Boolean   [N1, N2, ..., N(k - 1), m]
         return torch.logical_xor(
             self.predict(X=X),  # Boolean   [N1, N2, ..., N(k - 1), m]
-            y                   # Boolean   [N1, N2, ..., N(k - 1), m]
+            y.bool()            # Boolean   [N1, N2, ..., N(k - 1), m]
         )
     
     def error_rate(
@@ -131,11 +119,14 @@ class ConditionalLinearModel(nn.Module):
     def __init__(
             self,
             seletor_weights: torch.Tensor = None,
-            predictor: Any = None
+            predictor: Any = None,
+            device: torch.device = torch.device('cpu')
     ):
         super(ConditionalLinearModel, self).__init__()
 
-        self.selector, self.predictor = None, None
+        self.selector: LinearModel = None
+        self.predictor: Any = predictor
+        self.device = device
 
         self.set_selector(weights=seletor_weights)
         self.set_predictor(predictor=predictor)
@@ -146,7 +137,6 @@ class ConditionalLinearModel(nn.Module):
     ) -> None:
         if weights is not None and isinstance(weights, torch.Tensor):
             self.selector = LinearModel(weights=weights)
-            self.device = weights.device
 
     def set_predictor(
             self,
@@ -154,6 +144,14 @@ class ConditionalLinearModel(nn.Module):
     ) -> None:
         if predictor and hasattr(predictor, "errors"):
             self.predictor = predictor
+
+    def select_data(
+            self,
+            X: torch.Tensor,
+            y: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        selections = self.selector.predict(X=X)
+        return y[selections], X[selections]
 
     def conditional_error_rate(
             self,
@@ -179,43 +177,47 @@ class PredictiveModel(nn.Module):
             device: torch.device
     ):
         super(PredictiveModel, self).__init__()
-        self.model = model
-        self.max_data_train = max_data_train
-        self.device = device
+        self.model: Any = model
+        self.max_data_train: int = max_data_train
+        self.device: torch.device = device
     
     def train(
             self,
-            dataloader: DataLoader
+            data: Tuple[torch.Tensor]
     ) -> None:
+        y, X = data
         if hasattr(self.model, "fit"):
-            labels, features = next(iter(dataloader))
-            cutoff = min(labels.size(0), self.max_data_train)
+            cutoff = min(y.size(0), self.max_data_train)
             self.model.fit(
-                features[:cutoff].cpu().numpy(), 
-                labels[:cutoff].cpu().numpy()
+                X[:cutoff].cpu().numpy(), 
+                y[:cutoff].cpu().numpy()
             )
+
+    def predict(
+            self,
+            X: torch.Tensor
+    ) -> torch.Tensor:
+        if hasattr(self.model, "predict"):
+            return torch.from_numpy(
+                self.model.predict(X.cpu().numpy())
+            ).to(self.device).bool()
+        else:
+            print(f"Predictor is empty!")
+            return torch.zeros(X.size(0))
     
     def errors(
             self,
             X: torch.Tensor,
             y: torch.Tensor
     ) -> torch.Tensor:
-        if hasattr(self.model, "predict"):
-            return torch.logical_xor(
-                torch.from_numpy(
-                    self.model.predict(X.cpu().numpy())
-                ).to(X.device).bool(),
-                y.bool()
-            )
-        else:
-            return y
+        return torch.logical_xor(
+            self.predict(X=X),
+            y.bool()
+        )
     
     def error_rate(
             self,
             X: torch.Tensor,
             y: torch.Tensor
     ) -> torch.Tensor:
-        if hasattr(self.model, "predict"):
-            return self.errors(X=X, y=y).sum() / X.size(0)
-        else:
-            return torch.tensor(0.5).to(X.device)
+        return self.errors(X=X, y=y).sum() / X.size(0)

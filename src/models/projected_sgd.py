@@ -90,7 +90,8 @@ class SelectorPerceptron(nn.Module):
             model=ConditionalLinearModel(
                 seletor_weights=torch.stack(
                     [init_weight, -init_weight]
-                )   # [2, cluster_size, dim_sample]
+                ),   # [2, cluster_size, dim_sample]
+                device=self.device
             )
         )
 

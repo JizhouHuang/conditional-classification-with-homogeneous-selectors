@@ -223,7 +223,8 @@ class RobustListLearner(nn.Module):
                     weight_slice.flatten(),
                     size
                 )
-            )
+            ),
+            device=self.device
         )
 
     # verification function

@@ -8,6 +8,9 @@ from torch.utils.data import DataLoader
 from ..utils.data import TransformedDataset
 from ..models.conditional_learner import ConditionalLearnerForFiniteClass
 from ..models.robust_list_learner import RobustListLearner
+from ..models.baseline_learner import SVMLearner
+from ..utils.simple_models import ConditionalLinearModel
+
 
 class ExperimentCCSC(nn.Module):
     """
@@ -89,7 +92,7 @@ class ExperimentCCSC(nn.Module):
             device=self.device
         )
 
-        sparse_classifier_clusters = robust_list_learner(
+        sparse_classifier_clusters: List[ConditionalLinearModel] = robust_list_learner(
             DataLoader(
                 TransformedDataset(data_train),
                 batch_size=self.num_sample_rll
@@ -121,10 +124,24 @@ class ExperimentCCSC(nn.Module):
 
         # print(tabulate(table, headers="firstrow", tablefmt="grid"))
 
-        conditional_classifier = conditional_learner(
-            dataset= TransformedDataset(data_train),
+        conditional_classifier: ConditionalLinearModel = conditional_learner(
+            dataset = TransformedDataset(data_train),
             classifier_clusters=sparse_classifier_clusters
         )   # Tuple[torch.Tensor, torch.Tensor]
+
+        # fitting a SVM on the selector
+        print(f"{self.header} fitting SVM on the best selector ...")
+        svm_classifier = ConditionalLinearModel(
+            seletor_weights=conditional_classifier.selector.weights.clone(),
+            predictor=SVMLearner(device=self.device),
+            device=self.device
+        )
+        svm_classifier.predictor.train(
+            svm_classifier.select_data(
+                X=data_train[:, 1:],
+                y=data_train[:, 0]
+            )
+        )
 
         # model selection for sparse classifiers based on regular classification error
         print(" ".join([self.header, "finding empirical error minimizer from sparse perceptrons ..."]))
@@ -157,13 +174,19 @@ class ExperimentCCSC(nn.Module):
             X=data_test[:, 1:],
             y=data_test[:, 0]
         )
+        
+        error_svm = svm_classifier.conditional_error_rate(
+            X=data_test[:, 1:],
+            y=data_test[:, 0]
+        )
 
         coverage = conditional_classifier.selector.prediction_rate(X=data_test[:, 1:])
 
         res = [
             (eem_classifier, min_error),
             (conditional_classifier.predictor[...], error_wo),
-            (torch.stack([conditional_classifier.predictor[...], conditional_classifier.selector[...]]), (error, coverage))
+            (conditional_classifier, (error, coverage)),
+            (svm_classifier, (error_svm, coverage))
         ]
         
         # Print the results in a table format
@@ -171,7 +194,8 @@ class ExperimentCCSC(nn.Module):
             ["Classifier Type", "Sample Size", "Sample Dim", "Sparsity", "PSGD Iter", "Batch Size", "Est ER", "Coverage"],
             ["Classic Sparse", data_test.shape[0], data_test.shape[1] - 1, self.sparsity, self.num_iter, self.batch_size, min_error, 1],
             ["Cond Sparse w/o Selector", data_test.shape[0], data_test.shape[1] - 1, self.sparsity, self.num_iter, self.batch_size, error_wo, 1],
-            ["Cond Sparse", data_test.shape[0], data_test.shape[1] - 1, self.sparsity, self.num_iter, self.batch_size, error, coverage]
+            ["Cond Sparse", data_test.shape[0], data_test.shape[1] - 1, self.sparsity, self.num_iter, self.batch_size, error, coverage],
+            ["Cond SVM", data_test.shape[0], data_test.shape[1] - 1, self.sparsity, self.num_iter, self.batch_size, error_svm, coverage]
         ]
         print(tabulate(table, headers="firstrow", tablefmt="grid"))
 
