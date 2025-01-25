@@ -21,14 +21,14 @@ def main(data_name: str):
     data_test_path = "".join(["src/data/csv/", data_name, "_test.csv"])
 
     config_file_path = "".join(["src/config/model/", data_name, ".yaml"])
-    # config_file_path = "src/config/model/model_toy.yaml"
+    config_file_path = "src/config/model/model_toy.yaml"
 
-    num_experiment = 100
-    sparse_errs = torch.ones(num_experiment)
-    cond_errs_wo = torch.ones(num_experiment)
-    cond_errs = torch.ones(num_experiment)
-    cond_svm_errs = torch.ones(num_experiment)
-    coverages = torch.ones(num_experiment)
+    num_experiment = 5
+    sparse_errs = []
+    cond_errs_wo = []
+    cond_errs = []
+    cond_svm_errs = []
+    coverages = []
     header = "main -"
 
     # Load the data
@@ -59,22 +59,29 @@ def main(data_name: str):
         )
 
         # Record the result error measures
-        sparse_errs[eid] = res[0][1]
-        cond_errs_wo[eid] = res[1][1]
-        cond_errs[eid], coverages[eid] = res[2][1]
-        cond_svm_errs[eid], _ = res[3][1]
+        sparse_errs.append(res[0][1])
+        cond_errs_wo.append(res[1][1])
+        cond_errs.append(res[2][1][0]) 
+        coverages.append(res[2][1][1])
+        cond_svm_errs.append(res[3][1][0])
 
         print(f"{header} printing error statistics ...")
         # Print the results in a table format
         table = [
             ["Classifier Type", "Data", "Trials", "Min ER", "Min Cover", "Med ER", "Med Cover", "95th ER", "95th Cover", "Avg ER", "Avg Cover", "95th Avg ER", "95th Avg ER"],
-            get_statistics("Classic Sparse", data_name, eid + 1, sparse_errs[:eid + 1]),
-            get_statistics("Cond Sparse w/o Selector", data_name, eid + 1, cond_errs_wo[:eid + 1]),
-            get_statistics("Cond Sparse", data_name, eid + 1, cond_errs[:eid + 1], coverages[:eid + 1]),
-            get_statistics("Cond SVM", data_name, eid + 1, cond_svm_errs[:eid + 1], coverages[:eid + 1])
+            get_statistics("Classic Sparse", data_name, eid + 1, torch.tensor(sparse_errs, dtype=torch.float32, device=device)),
+            get_statistics("Cond Sparse w/o Selector", data_name, eid + 1, torch.tensor(cond_errs_wo, dtype=torch.float32, device=device)),
+            get_statistics("Cond Sparse", data_name, eid + 1, torch.tensor(cond_errs, dtype=torch.float32, device=device), torch.tensor(coverages, dtype=torch.float32, device=device)),
+            get_statistics("Cond SVM", data_name, eid + 1, torch.tensor(cond_svm_errs, dtype=torch.float32, device=device), torch.tensor(coverages, dtype=torch.float32, device=device))
         ]
         print(tabulate(table, headers="firstrow", tablefmt="grid"))
     
+        # data_store = torch.stack([sparse_errs, cond_errs_wo, cond_errs, cond_svm_errs]).T
+        data_store = [sparse_errs, cond_errs_wo, cond_errs, cond_svm_errs, coverages]
+        rows = ["Classic Sparse ER", "Cond Sparse ER w/o Selector", "Cond Sparse ER", "Cond SVM ER", "Coverage"]
+        df = pd.DataFrame(data_store, index=rows)
+        df.to_csv("src/log/" + data_name + ".csv", index=True)
+        
 
     
 def get_statistics(
@@ -111,11 +118,11 @@ def get_statistics(
     nf_avg_err = torch.mean(sorted_err[:nfq_err_ids + 1])
 
     # compute coverages
-    min_coverage = coverage
-    med_coverage = coverage
-    nfq_coverage = coverage
-    avg_coverage = coverage
-    nf_avg_coverage = coverage
+    min_coverage = 1
+    med_coverage = 1
+    nfq_coverage = 1
+    avg_coverage = 1
+    nf_avg_coverage = 1
 
     if coverage is not None:
         min_coverage = coverage[min_ids]

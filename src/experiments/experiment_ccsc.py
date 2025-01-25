@@ -183,10 +183,10 @@ class ExperimentCCSC(nn.Module):
         coverage = conditional_classifier.selector.prediction_rate(X=data_test[:, 1:])
 
         res = [
-            (eem_classifier, min_error),
-            (conditional_classifier.predictor[...], error_wo),
-            (conditional_classifier, (error, coverage)),
-            (svm_classifier, (error_svm, coverage))
+            (eem_classifier, float(min_error)),
+            (conditional_classifier.predictor[...], float(error_wo)),
+            (conditional_classifier, (float(error), float(coverage))),
+            (svm_classifier, (float(error_svm), float(coverage)))
         ]
         
         # Print the results in a table format
