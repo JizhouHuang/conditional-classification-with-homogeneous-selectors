@@ -125,24 +125,31 @@ class SelectorPerceptron(nn.Module):
             dataloader=dataloader_train,
             max_iterations=self.num_iter
         )
-        # enable to show progress bar
-        # for data in tqdm(
-        #     dataloader_fixed, 
-        #     total=dataloader_fixed.max_iterations, 
-        #     desc=self.header,
-        #     leave=False
-        # ):
+
+        # progress bar to count converged weights
+        # converged_bar = tqdm(
+        #     total=self.cluster_size * 2,
+        #     desc=f"{self.header} converging"
+        # )
+
         for data in dataloader_fixed:
             # labels:   [data_batch_size, cluster_size]
             # features: [data_batch_size, dim_sample]
             labels, features = data
 
+            # compute projected gradients
+            proj_grads = model.selector.proj_grad(
+                X=features,
+                y=labels.t()
+            )
+
+            # update convergence progress
+            # converged_bar.n = int((torch.norm(proj_grads, p=2, dim=-1) < 0.1).sum())
+            # converged_bar.refresh()
+
             # gradient step
             model.selector.update(
-                weights= - self.beta * model.selector.proj_grad(
-                    X=features,
-                    y=labels.t()
-                )
+                weights= - self.beta * proj_grads
             )
             # compute conditional error rates
             conditional_errors = model.conditional_error_rate(
@@ -157,6 +164,8 @@ class SelectorPerceptron(nn.Module):
                 min_weight=self.selector_list
             )
             # torch.cuda.synchronize()
+        
+        # converged_bar.close()
     
     def pairwise_update(
             self,
@@ -166,7 +175,7 @@ class SelectorPerceptron(nn.Module):
             min_weight: torch.Tensor
     ) -> None:
         # print(f"{self.header}> updating - computing indices for weights that need to update ...")
-        indices = curr_error <= min_error   # [..., cluster_size]
+        indices = curr_error < min_error   # [..., cluster_size]
         # print(f"{self.header}> updating - updating errors ...")
         self.min_error = min_error * ~indices + curr_error * indices   # [..., cluster_size]
         # print(f"{self.header}> updating - updating weights ...")

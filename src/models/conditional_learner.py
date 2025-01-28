@@ -48,9 +48,9 @@ class ConditionalLearnerForFiniteClass(nn.Module):
             )
         )
         self.init_weight = torch.randn(
-            self.dim_sample, 
-            device=device
-        )
+            self.dim_sample,
+            generator=torch.Generator().manual_seed(42)
+        ).to(device)
         self.init_weight = self.init_weight / torch.norm(self.init_weight, p=2)
 
     def forward(
@@ -92,6 +92,13 @@ class ConditionalLearnerForFiniteClass(nn.Module):
         # initialize evaluation dataset for conditional learner
         labels_eval, features_eval = dataset[:]
 
+        # initialze train dataset for PSGD
+        dataset_train, dataset_val = random_split(
+            dataset, 
+            [self.sample_size_psgd, len(dataset) - self.sample_size_psgd],
+            # generator=torch.Generator().manual_seed(42)
+        )
+
         # for i, classifiers in enumerate(
         #     tqdm(
         #         classifier_clusters, 
@@ -102,10 +109,6 @@ class ConditionalLearnerForFiniteClass(nn.Module):
         for i, classifiers in enumerate(classifier_clusters):
             dataset.set_predictor(
                 predictor=classifiers.predictor
-            )
-            dataset_train, dataset_val = random_split(
-                dataset, 
-                [self.sample_size_psgd, len(dataset) - self.sample_size_psgd]
             )
 
             selector_learner = SelectorPerceptron(

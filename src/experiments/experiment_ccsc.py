@@ -59,6 +59,7 @@ class ExperimentCCSC(nn.Module):
         self.lr_coeff = config['lr_coeff']
         self.num_iter = config['num_iter']
         self.batch_size = config['batch_size']
+        self.eid = experiment_id
 
     def forward(
             self,
@@ -94,7 +95,10 @@ class ExperimentCCSC(nn.Module):
 
         sparse_classifier_clusters: List[ConditionalLinearModel] = robust_list_learner(
             DataLoader(
-                TransformedDataset(data_train),
+                TransformedDataset(
+                    data_train, 
+                    # random_state=42
+                ),
                 batch_size=self.num_sample_rll
             )
         )   # List[ConditionalLinearModel]
@@ -124,12 +128,19 @@ class ExperimentCCSC(nn.Module):
             predictor=SVMLearner(device=self.device),
             device=self.device
         )
-        svm_classifier.predictor.train(
-            svm_classifier.select_data(
-                X=data_train[:, 1:],
-                y=data_train[:, 0]
+        try:
+            svm_classifier.predictor.train(
+                svm_classifier.select_data(
+                    X=data_train[:, 1:],
+                    y=data_train[:, 0]
+                )
             )
-        )
+            error_svm = svm_classifier.conditional_error_rate(
+                X=data_test[:, 1:],
+                y=data_test[:, 0]
+            )
+        except ValueError:
+            error_svm = 0
 
         # model selection for sparse classifiers based on regular classification error
         print(" ".join([self.header, "finding empirical error minimizer from sparse perceptrons ..."]))
@@ -161,12 +172,7 @@ class ExperimentCCSC(nn.Module):
         error = conditional_classifier.conditional_error_rate(
             X=data_test[:, 1:],
             y=data_test[:, 0]
-        )
-        
-        error_svm = svm_classifier.conditional_error_rate(
-            X=data_test[:, 1:],
-            y=data_test[:, 0]
-        )
+        )     
 
         coverage = conditional_classifier.selector.prediction_rate(X=data_test[:, 1:])
 
@@ -179,11 +185,11 @@ class ExperimentCCSC(nn.Module):
         
         # Print the results in a table format
         table = [
-            ["Classifier Type", "Sample Size", "Sample Dim", "Sparsity", "PSGD Iter", "Batch Size", "Est ER", "Coverage"],
-            ["Classic Sparse", data_test.shape[0], data_test.shape[1] - 1, self.sparsity, self.num_iter, self.batch_size, min_error, 1],
-            ["Cond Sparse w/o Selector", data_test.shape[0], data_test.shape[1] - 1, self.sparsity, self.num_iter, self.batch_size, error_wo, 1],
-            ["Cond Sparse", data_test.shape[0], data_test.shape[1] - 1, self.sparsity, self.num_iter, self.batch_size, error, coverage],
-            ["Cond SVM", data_test.shape[0], data_test.shape[1] - 1, self.sparsity, self.num_iter, self.batch_size, error_svm, coverage]
+            ["Classifier Type", "Train Size", "Test Size", "Sample Dim", "Sparsity", "PSGD Iter", "Batch Size", "LR Coeff", "Est ER", "Coverage"],
+            ["Classic Sparse", data_train.size(0), data_test.shape[0], data_test.shape[1] - 1, self.sparsity, self.num_iter, self.batch_size, self.lr_coeff, min_error, 1],
+            ["Cond Sparse w/o Selector", data_train.size(0), data_test.shape[0], data_test.shape[1] - 1, self.sparsity, self.num_iter, self.batch_size, self.lr_coeff, error_wo, 1],
+            ["Cond Sparse", data_train.size(0), data_test.shape[0], data_test.shape[1] - 1, self.sparsity, self.num_iter, self.batch_size, self.lr_coeff, error, coverage],
+            ["Cond SVM", data_train.size(0), data_test.shape[0], data_test.shape[1] - 1, self.sparsity, self.num_iter, self.batch_size, self.lr_coeff, error_svm, coverage]
         ]
         print(tabulate(table, headers="firstrow", tablefmt="grid"))
 

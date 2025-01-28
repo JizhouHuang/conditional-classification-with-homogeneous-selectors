@@ -1,15 +1,14 @@
 from typing import List, Tuple, Any
 import torch
-import pandas as pd
 from torch.utils.data import Dataset
-from .simple_models import LinearModel
 
 class TransformedDataset(Dataset):
     def __init__(
             self, 
             data: torch.Tensor, 
             predictor: Any = None,
-            shuffle: bool = True
+            shuffle: bool = True,
+            random_state: int = None
         ):
         """
         Initialize the dataset with a label mapping.
@@ -27,7 +26,15 @@ class TransformedDataset(Dataset):
         self.data = data
 
         if shuffle:
-            self.data = data[torch.randperm(data.size(0))]
+            if random_state:
+                self.data = data[
+                    torch.randperm(
+                        data.size(0), 
+                        generator=torch.Generator().manual_seed(random_state)
+                    )
+                ]
+            else:
+                self.data = data[torch.randperm(data.size(0))]
             
         self.trans_labels = None
         self.predictor = predictor

@@ -18,7 +18,7 @@ class LinearModel(nn.Module):
     def forward(
             self,
             X: torch.Tensor     # Float     [m, d]
-    ) -> torch.Tensor:          # Float     [m]
+    ) -> torch.Tensor:          # Float     [N1, N2, ..., N(k - 1), m]
         if self.weights.is_sparse:
             return torch.sparse.mm(self.weights, X.t())
         else:
@@ -40,7 +40,7 @@ class LinearModel(nn.Module):
             self,
             X: torch.Tensor     # Float     [m, d]
     ) -> torch.Tensor:          # Boolean   [N1, N2, ..., N(k - 1), m]
-        return self.forward(X=X) > 0
+        return self.forward(X=X) >= 0
     
     def prediction_rate(
             self,
@@ -104,7 +104,7 @@ class LinearModel(nn.Module):
             X: torch.Tensor,    # Float     [m, d]
             y: torch.Tensor     # Boolean   [N1, N2, ..., N(k - 1), m]
     ) -> torch.Tensor:          # Float     [N1, N2, ..., N(k - 1), ]
-        orthogonal_projections = X - self.forward(X).unsqueeze(-1) * X      # [N1, N2, ..., N(k - 1), m, d]
+        orthogonal_projections = X - torch.matmul(self.forward(X).unsqueeze(-1), self.weights.unsqueeze(-2))      # [N1, N2, ..., N(k - 1), m, d]
                                                                             # X - <X, w>w^T
         return torch.mean(
             self.agreements(

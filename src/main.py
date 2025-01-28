@@ -23,7 +23,7 @@ def main(data_name: str):
     config_file_path = "".join(["src/config/model/", data_name, ".yaml"])
     # config_file_path = "src/config/model/model_toy.yaml"
 
-    num_experiment = 100
+    num_experiment = 50
     sparse_errs = []
     cond_errs_wo = []
     cond_errs = []
@@ -80,7 +80,8 @@ def main(data_name: str):
         data_store = [sparse_errs, cond_errs_wo, cond_errs, cond_svm_errs, coverages]
         rows = ["Classic Sparse ER", "Cond Sparse ER w/o Selector", "Cond Sparse ER", "Cond SVM ER", "Coverage"]
         df = pd.DataFrame(data_store, index=rows)
-        df.to_csv("src/log/raw_" + data_name + ".csv", index=True)
+        # df.to_csv("src/log/raw_" + data_name + ".csv", index=True)
+        df.to_csv("src/log/raw_" + data_name + "_2" + ".csv", index=True)
         
 
     
