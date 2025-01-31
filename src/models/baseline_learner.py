@@ -24,7 +24,7 @@ class SVMLearner(PredictiveModel):
     ):
 
         super().__init__(
-            model=SVC(kernel='linear'), 
+            model=SVC(C=100000, kernel='linear'), 
             max_data_train=max_data_train, 
             device=device
         )

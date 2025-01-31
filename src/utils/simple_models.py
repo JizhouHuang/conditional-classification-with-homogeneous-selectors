@@ -50,13 +50,10 @@ class LinearModel(nn.Module):
     
     def agreements(
             self,
-            X: torch.Tensor,    # Float     [m, d]
-            y: torch.Tensor     # Boolean   [N1, N2, ..., N(k - 1), m]
-    ) -> torch.Tensor:          # Boolean   [N1, N2, ..., N(k - 1), m]
-        return torch.logical_and(
-            self.predict(X=X),  # Boolean   [N1, N2, ..., N(k - 1), m]
-            y.bool()            # Boolean   [N1, N2, ..., N(k - 1), m]
-        )
+            X: torch.Tensor,                    # Float     [m, d]
+            y: torch.Tensor                     # Boolean   [N1, N2, ..., N(k - 1), m]
+    ) -> torch.Tensor:                          # Boolean   [N1, N2, ..., N(k - 1), m]
+        return self.predict(X=X) != y.bool()    # Boolean   [N1, N2, ..., N(k - 1), m]
     
     def accuracy(
             self,
@@ -70,13 +67,10 @@ class LinearModel(nn.Module):
     
     def errors(
             self,
-            X: torch.Tensor,    # Float     [m, d]
-            y: torch.Tensor     # Boolean   [N1, N2, ..., N(k - 1), m]
-    ) -> torch.Tensor:          # Boolean   [N1, N2, ..., N(k - 1), m]
-        return torch.logical_xor(
-            self.predict(X=X),  # Boolean   [N1, N2, ..., N(k - 1), m]
-            y.bool()            # Boolean   [N1, N2, ..., N(k - 1), m]
-        )
+            X: torch.Tensor,                    # Float     [m, d]
+            y: torch.Tensor                     # Boolean   [N1, N2, ..., N(k - 1), m]
+    ) -> torch.Tensor:                          # Boolean   [N1, N2, ..., N(k - 1), m]
+        return self.predict(X=X) != y.bool()    # Boolean   [N1, N2, ..., N(k - 1), m]
     
     def error_rate(
             self,
@@ -210,10 +204,7 @@ class PredictiveModel(nn.Module):
             X: torch.Tensor,
             y: torch.Tensor
     ) -> torch.Tensor:
-        return torch.logical_xor(
-            self.predict(X=X),
-            y.bool()
-        )
+        return self.predict(X=X) != y.bool()
     
     def error_rate(
             self,

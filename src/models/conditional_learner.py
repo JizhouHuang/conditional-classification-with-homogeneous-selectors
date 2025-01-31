@@ -99,14 +99,14 @@ class ConditionalLearnerForFiniteClass(nn.Module):
             # generator=torch.Generator().manual_seed(42)
         )
 
-        # for i, classifiers in enumerate(
-        #     tqdm(
-        #         classifier_clusters, 
-        #         desc=f"{self.header} learning selectors",
-        #         # leave=False
-        #     )
-        # ):
-        for i, classifiers in enumerate(classifier_clusters):
+        for i, classifiers in enumerate(
+            tqdm(
+                classifier_clusters, 
+                desc=f"{self.header} learning selectors",
+                # leave=False
+            )
+        ):
+        # for i, classifiers in enumerate(classifier_clusters):
             dataset.set_predictor(
                 predictor=classifiers.predictor
             )

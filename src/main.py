@@ -68,7 +68,7 @@ def main(data_name: str):
         print(f"{header} printing error statistics ...")
         # Print the results in a table format
         table = [
-            ["Classifier Type", "Data", "Trials", "Min ER", "Min Cover", "Med ER", "Med Cover", "95th ER", "95th Cover", "Avg ER", "Avg Cover", "95th Avg ER", "95th Avg ER"],
+            ["Classifier Type", "Data", "Trials", "Min ER", "Min Cover", "Med ER", "Med Cover", "95th ER", "95th Cover", "Avg ER", "Avg Cover", "ER std", "95th Avg ER", "95th Avg Cover"],
             get_statistics("Classic Sparse", data_name, eid + 1, torch.tensor(sparse_errs, dtype=torch.float32, device=device)),
             get_statistics("Cond Sparse w/o Selector", data_name, eid + 1, torch.tensor(cond_errs_wo, dtype=torch.float32, device=device)),
             get_statistics("Cond Sparse", data_name, eid + 1, torch.tensor(cond_errs, dtype=torch.float32, device=device), torch.tensor(coverages, dtype=torch.float32, device=device)),
@@ -76,12 +76,11 @@ def main(data_name: str):
         ]
         print(tabulate(table, headers="firstrow", tablefmt="grid"))
     
-        # data_store = torch.stack([sparse_errs, cond_errs_wo, cond_errs, cond_svm_errs]).T
         data_store = [sparse_errs, cond_errs_wo, cond_errs, cond_svm_errs, coverages]
         rows = ["Classic Sparse ER", "Cond Sparse ER w/o Selector", "Cond Sparse ER", "Cond SVM ER", "Coverage"]
         df = pd.DataFrame(data_store, index=rows)
         # df.to_csv("src/log/raw_" + data_name + ".csv", index=True)
-        df.to_csv("src/log/raw_" + data_name + "_2" + ".csv", index=True)
+        df.to_csv("src/log/raw_" + data_name + "_3" + ".csv", index=True)
         
 
     
@@ -111,6 +110,9 @@ def get_statistics(
     # average err
     avg_err = torch.mean(errors)
 
+    # err std
+    err_std = errors.std()
+
     # 95th quatile average err
     nfq_err_ids = torch.where(sorted_err == nfq_err)[0]
     if nfq_err_ids.size(0) > 1:
@@ -134,7 +136,7 @@ def get_statistics(
         avg_coverage = torch.mean(coverage)
         nf_avg_coverage = torch.mean(sorted_cov[:nfq_err_ids + 1])
 
-    return [classifier, data_name, eid, min_err, min_coverage, med_err, med_coverage, nfq_err, nfq_coverage, avg_err, avg_coverage, nf_avg_err, nf_avg_coverage]
+    return [classifier, data_name, eid, min_err, min_coverage, med_err, med_coverage, nfq_err, nfq_coverage, avg_err, avg_coverage, err_std, nf_avg_err, nf_avg_coverage]
 
     
 

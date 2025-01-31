@@ -20,7 +20,6 @@ class ExperimentBaseline(nn.Module):
             prev_header: str,
             experiment_id: int,
             config_file_path: str,
-            learner_classes: List[Any],
             device: torch.device
     ):
         """
@@ -42,7 +41,6 @@ class ExperimentBaseline(nn.Module):
         super(ExperimentBaseline, self).__init__()
         self.header = " ".join([prev_header, "experiment", str(experiment_id), "-"])
         self.device = device
-        self.predictors = [lc() for lc in learner_classes]
 
         # Read the YAML configuration file
         with open(config_file_path, 'r') as file:
@@ -55,11 +53,13 @@ class ExperimentBaseline(nn.Module):
         self.lr_coeff = config['lr_coeff']
         self.num_iter = config['num_iter']
         self.batch_size = config['batch_size']
+        self.eid = experiment_id
 
     def forward(
             self,
             data_train: torch.Tensor,
-            data_test: torch.Tensor
+            data_test: torch.Tensor,
+            predictors: List[Any]
     ) -> List[List[torch.Tensor]]:
         """
         Call Robust List Learner to generate a list of sparse classifiers and input them to the Conditional Learner.
@@ -69,31 +69,9 @@ class ExperimentBaseline(nn.Module):
         data_test:      Testing data to estimate the error measures of the final classifier-selector pair.
                         Disjoint from data_train.
         """
-        # Learn the sparse classifiers
-        print(" ".join([self.header, "initializing baseline learners ..."]))
-        
-        dloader = DataLoader(
-            TransformedDataset(data_train),
-            batch_size=data_train.size(0)
-        )
-        for pred in tqdm(self.predictors, desc=f"{self.header} learning predictors"):
-            pred.train(dloader)
-
-        # table = [
-        #     ["Algorithm", "Sample Size", "Sample Dimension", "Data Device", "Number of Predictors"],
-        #     ["Fit Learners", min(self.num_sample_rll, data_train.size(0)), data_train.shape[1] - 1, len(self.predictors)]
-        # ]
-        # print(tabulate(table, headers="firstrow", tablefmt="grid"))
 
         # Perform conditional learning
         print(" ".join([self.header, "starting conditional classification for homogeneous halfspaces ..."]))
-
-        table = [
-            ["Algorithm", "Sample Size", "Sample Dimension", "Data Device", "Max Iterations", "LR Scaler", "Batch Size"],
-            ["Cond Classification", data_train.shape[0], data_train.shape[1] - 1, data_train.device, self.num_iter, self.lr_coeff, self.batch_size]
-        ]
-
-        print(tabulate(table, headers="firstrow", tablefmt="grid"))
 
         cond_classifiers = []
         dim_sample = data_train.size(1) - 1
@@ -105,7 +83,7 @@ class ExperimentBaseline(nn.Module):
         )
         init_weight = init_weight / torch.norm(init_weight, p=2)
         # print(f"{self.header} learning seletors ...")
-        for pred in tqdm(self.predictors, desc=f"{self.header} learning selectors"):
+        for pred in tqdm(predictors, desc=f"{self.header} learning selectors"):
         # for pred in self.predictors:
             dataset.set_predictor(predictor=pred)
             dataset_train, dataset_val = random_split(
@@ -151,15 +129,14 @@ class ExperimentBaseline(nn.Module):
 
             coverages[i] = cc.selector.prediction_rate(X=data_test[:, 1:])
 
-        res = (error_wo,  errors, coverages)
+        res = (error_wo[0],  errors[0], coverages[0])
         
         # Print the results in a table format
-        # table = [
-        #     ["Predictor Name", "Logistic", "SVM", "Random Forest", "XGBoost"],
-        #     ["Classification Error"] + error_wo.tolist(),
-        #     ["Cond SClassification Error"] + errors.tolist(),
-        #     ["Coverage"] + coverages.tolist()
-        # ]
-        # print(tabulate(table, headers="firstrow", tablefmt="grid"))
+        table = [
+            ["Classifier Type", "Train Size", "Test Size", "Sample Dim", "SGD Data Size", "PSGD Iter", "Batch Size", "LR Coeff", "Est ER", "Coverage"],
+            ["Classic SVM", data_train.size(0), data_test.shape[0], data_test.shape[1] - 1, sample_size_psgd, self.num_iter, self.batch_size, self.lr_coeff, error_wo[0], 1],
+            ["Cond SVM", data_train.size(0), data_test.shape[0], data_test.shape[1] - 1, sample_size_psgd, self.num_iter, self.batch_size, self.lr_coeff, errors[0], coverages[0]]
+        ]
+        print(tabulate(table, headers="firstrow", tablefmt="grid"))
 
         return res
