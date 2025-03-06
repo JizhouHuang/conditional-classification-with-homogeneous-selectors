@@ -51,15 +51,15 @@ class LinearModel(nn.Module):
     def agreements(
             self,
             X: torch.Tensor,                    # Float     [m, d]
-            y: torch.Tensor                     # Boolean   [N1, N2, ..., N(k - 1), m]
-    ) -> torch.Tensor:                          # Boolean   [N1, N2, ..., N(k - 1), m]
-        return self.predict(X=X) != y.bool()    # Boolean   [N1, N2, ..., N(k - 1), m]
+            y: torch.Tensor                     # Boolean   [Ni, ..., N(k - 1), m]
+    ) -> torch.Tensor:                          # Boolean   [N1, ..., Ni, ..., N(k - 1), m]
+        return self.predict(X=X) == y.bool()    # [N1, ..., Ni, ..., N(k - 1), m] * [Ni, ..., N(k - 1), m]
     
     def accuracy(
             self,
             X: torch.Tensor,    # Float     [m, d]
-            y: torch.Tensor     # Boolean   [N1, N2, ..., N(k - 1), m]
-    ) -> torch.Tensor:          # Float     [N1, N2, ..., N(k - 1)]
+            y: torch.Tensor     # Boolean   [Ni, ..., N(k - 1), m]
+    ) -> torch.Tensor:          # Boolean   [N1, ..., Ni, ..., N(k - 1)]
         return self.agreements(
             X=X,
             y=y
@@ -68,15 +68,15 @@ class LinearModel(nn.Module):
     def errors(
             self,
             X: torch.Tensor,                    # Float     [m, d]
-            y: torch.Tensor                     # Boolean   [N1, N2, ..., N(k - 1), m]
-    ) -> torch.Tensor:                          # Boolean   [N1, N2, ..., N(k - 1), m]
-        return self.predict(X=X) != y.bool()    # Boolean   [N1, N2, ..., N(k - 1), m]
+            y: torch.Tensor                     # Boolean   [Ni, ..., N(k - 1), m]
+    ) -> torch.Tensor:                          # Boolean   [N1, ..., Ni, ..., N(k - 1), m]
+        return self.predict(X=X) != y.bool()    # [N1, ..., Ni, ..., N(k - 1), m] * [Ni, ..., N(k - 1), m]
     
     def error_rate(
             self,
             X: torch.Tensor,    # Float     [m, d]
-            y: torch.Tensor     # Boolean   [N1, N2, ..., N(k - 1), m]
-    ) -> torch.Tensor:          # Float     [N1, N2, ..., N(k - 1)]
+            y: torch.Tensor     # Boolean   [Ni, ..., N(k - 1), m]
+    ) -> torch.Tensor:          # Float     [N1, ..., Ni, ..., N(k - 1)]
         return self.errors(
             X=X,
             y=y
@@ -91,20 +91,42 @@ class LinearModel(nn.Module):
             self.weights, 
             p=2,
             dim=-1
-        ).unsqueeze(-1)
+        ).unsqueeze(-1)                 # [N1, N2, ..., N(k - 1), 1]
+
+    def proj_weights_to(
+            self,
+            ids: torch.Tensor,  # Boolean [N1, N2, ..., N(k - 1)]
+            X: torch.Tensor     # [N2, ..., N(k - 1), d]
+    ) -> None:
+        if ids.any():
+            X_rep = X.unsqueeze(0).expand(self.weights.shape[0], *X.shape[:]) # [N1, N2, ..., N(k - 1), d]
+
+            # <w, X>
+            w_proj = (self.weights[ids] * X_rep[ids]).sum(-1).unsqueeze(-1)  # [..., 1]
+
+            # w - <w, X>X^T
+            self.weights[ids] -= w_proj * X_rep[ids]
+
+    def proj_data(
+            self,
+            X: torch.Tensor     # Float     [m, d]
+    ) -> torch.Tensor:          # Float     [N1, N2, ..., N(k - 1), m, d]
+        # X - <X, w>w^T
+        return X - torch.matmul(
+            self.forward(X).unsqueeze(-1),  # [N1, N2, ..., N(k - 1), m, 1]
+            self.weights.unsqueeze(-2)      # [N1, N2, ..., N(k - 1), 1, d]
+        )      # [N1, N2, ..., N(k - 1), m, d]
     
     def proj_grad(
             self,
             X: torch.Tensor,    # Float     [m, d]
-            y: torch.Tensor     # Boolean   [N1, N2, ..., N(k - 1), m]
-    ) -> torch.Tensor:          # Float     [N1, N2, ..., N(k - 1), ]
-        orthogonal_projections = X - torch.matmul(self.forward(X).unsqueeze(-1), self.weights.unsqueeze(-2))      # [N1, N2, ..., N(k - 1), m, d]
-                                                                            # X - <X, w>w^T
+            y: torch.Tensor     # Boolean   [Ni, ..., N(k - 1), m]
+    ) -> torch.Tensor:          # Float     [N1, N2, ..., N(k - 1), d]                                                                                   
         return torch.mean(
             self.agreements(
                 X=X,
                 y=y
-            ).unsqueeze(-1) * orthogonal_projections,       # [N1, N2, ..., N(k - 1), m, d]
+            ).unsqueeze(-1) * self.proj_data(X=X),       # [N1, N2, ..., N(k - 1), m, d]
             dim=-2
         )
     
