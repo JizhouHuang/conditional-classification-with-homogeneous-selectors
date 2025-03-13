@@ -179,8 +179,8 @@ class ConditionalLinearClassifierLearner(nn.Module):
             num_observation=observations.size(0),
             desc=desc
         ):
-            print(f"{self.header} selected sample indices {sample_indices}, selected feature indices {feature_indices}")
             # learning sparse predictors
+            print(f"{self.header} learning sparse predictors conditioned on sample/feature indices {sample_indices}/{feature_indices} ...")
             predictors: LinearModel = predictor_learner(
                 ds_train_pred, 
                 sample_indices, 
@@ -198,6 +198,7 @@ class ConditionalLinearClassifierLearner(nn.Module):
             )
 
             # learn reference class with label mapping
+            print(f"{self.header} learning halfspace selectors with sparse predictor shape {predictors.size()} ...")
             eval_cond_errors, eval_ids, selectors = selector_learner(
                 dataset.label_with(predictors), 
                 observations
@@ -220,9 +221,9 @@ class ConditionalLinearClassifierLearner(nn.Module):
                 model=selectors
             )
 
-        print(f"{self.header} result predictor size: {min_predictors.size()}, is sparse? {min_predictors.weights.is_sparse}")
-        print(f"{self.header} reuslt selector size: {min_selectors.size()}, is sparse? {min_selectors.weights.is_sparse}")
-        print(f"{self.header} sparse predictors size {min_predictors.size()}")
+        # print(f"{self.header} result predictor size: {min_predictors.size()}, is sparse? {min_predictors.weights.is_sparse}")
+        # print(f"{self.header} reuslt selector size: {min_selectors.size()}, is sparse? {min_selectors.weights.is_sparse}")
+        # print(f"{self.header} sparse predictors size {min_predictors.size()}")
 
         return sparse_lm, min_cond_er, min_predictors, min_selectors
 

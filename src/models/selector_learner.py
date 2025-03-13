@@ -70,7 +70,6 @@ class SelectiveHalfspaceLearner(nn.Module):
         self.lr *= torch.sqrt(
             1/torch.tensor(self.num_iter * dataset.num_features())
         )
-        print(f"{self.header} learning rate is {self.lr}")
         
         # compute subset lengths using the given fractions
         subset_sizes = [int(len(dataset) * frac) for frac in subset_fracs]
@@ -124,16 +123,11 @@ class SelectiveHalfspaceLearner(nn.Module):
         selectors (LinearModel):        The selector model.             [num observations, num predictors, num features]
         """        
 
-        print(f"{self.header} dataset feature size: {(len(dataset), dataset.num_features())}")
-        print(f"{self.header} dataset label size: {(len(dataset), dataset.num_labels())}")
-
         # split dataset
         dataset_train, dataset_sel_pgd, dataset_sel = self.data_split(
             dataset=dataset,
             subset_fracs=self.subset_fracs
         )
-
-        print(f"{self.header} dataset_sel_pgd is None? {dataset_sel_pgd is None}")
 
         # initialize selectors using observations
         selectors: LinearModel = LinearModel(
@@ -144,15 +138,12 @@ class SelectiveHalfspaceLearner(nn.Module):
             )                                           # [num observations, num predictors, num features]
         )
 
-        print(f"{self.header} initial selectors size: {selectors.size()}\n")
-
         # run gradient descent algorithm
         selectors: LinearModel = self.PSGDOptim(
             lin_model=selectors,                        # [num observations, num predictors, num features]
             dataset_train=dataset_train, 
             dataset_sel_pgd=dataset_train      
         )                                               # [num observations, num predictors, num features]
-        print(f"{self.header} learned selectors size: {selectors.size()}\n")
 
         # reduce the model to the best classifier-selector pair
         return selectors.model_selection_by_one(
@@ -179,10 +170,10 @@ class SelectiveHalfspaceLearner(nn.Module):
         """        
 
         # initialize progress bar to count converged weights
-        self.converged_bar = tqdm(
-            total=lin_model.size(0) * lin_model.size(1),
-            desc=f"{self.header} converging"
-        )
+        # self.converged_bar = tqdm(
+        #     total=lin_model.size(0) * lin_model.size(1),
+        #     desc=f"{self.header} converging"
+        # )
         dataloader_train = FixedIterationLoader(
             dataloader=DataLoader(
                 dataset_train,
@@ -204,7 +195,7 @@ class SelectiveHalfspaceLearner(nn.Module):
                 dataloader_train=dataloader_train
             )
 
-        self.converged_bar.close()
+        # self.converged_bar.close()
         
         return lin_model
     
@@ -314,8 +305,8 @@ class SelectiveHalfspaceLearner(nn.Module):
         )
 
         # update convergence progress
-        self.converged_bar.n = int((torch.norm(proj_grads, p=2, dim=-1) < 0.075).sum())
-        self.converged_bar.refresh()
+        # self.converged_bar.n = int((torch.norm(proj_grads, p=2, dim=-1) < 0.075).sum())
+        # self.converged_bar.refresh()
 
     def pairwise_select(
             self,
