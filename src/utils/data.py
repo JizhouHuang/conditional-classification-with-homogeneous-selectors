@@ -1,14 +1,12 @@
-from typing import List, Tuple, Any
+from typing import Any, Self, Tuple
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 
-class TransformedDataset(Dataset):
+class MultiLabeledDataset(Dataset):
     def __init__(
             self, 
             data: torch.Tensor, 
-            predictor: Any = None,
-            shuffle: bool = True,
-            random_state: int = None
+            predictor: Any = None
         ):
         """
         Initialize the dataset with a label mapping.
@@ -23,22 +21,8 @@ class TransformedDataset(Dataset):
                                 take the classifier(s) and the feature in the form of torch.Tensor as
                                 inputs, then outputs a label in the form of torch.Tensor.
         """
-        self.data = data
-
-        if shuffle:
-            if random_state:
-                self.data = data[
-                    torch.randperm(
-                        data.size(0), 
-                        generator=torch.Generator().manual_seed(random_state)
-                    )
-                ]
-            else:
-                self.data = data[torch.randperm(data.size(0))]
-            
-        self.trans_labels = None
-        self.predictor = predictor
-        self.label_map()
+        self.data: torch.Tensor = data
+        self.label_to_errors(predictor)
         self.device = data.device
 
     def __len__(self) -> int:
@@ -47,33 +31,107 @@ class TransformedDataset(Dataset):
     def __getitem__(
             self, 
             idx: int
-        ) -> tuple[torch.Tensor, torch.Tensor]:
+        ) -> Tuple[torch.Tensor, torch.Tensor]:
         return self.trans_labels[idx], self.data[idx, 1:]
     
-    def dim(self) -> torch.Tensor:
+    def decouple(self) -> Tuple[torch.Tensor, torch.Tensor]:
+        return self.trans_labels.t(), self.data[:, 1:]
+    
+    def features(self) -> torch.Tensor:
+        return self.data[:, 1:]
+    
+    def labels(self) -> torch.Tensor:
+        return self.trans_labels
+    
+    def num_features(self) -> int:
         return self.data.size(1) - 1
     
-    def label_map(self) -> None:
+    def size_feature(
+            self,
+            dim: int = -1
+    ) -> Tuple[int, torch.Size]:
+        if dim < 0:
+            return torch.Size([self.data.size(0), self.num_features()])
+        elif dim == 0:
+            return self.data.size(0)
+        else:
+            return self.num_features()
+    
+    def num_labels(self) -> int:
+        if len(self.trans_labels.size()) == 1:
+            return 1
+        else:
+            return self.trans_labels.size(1)
+        
+    def size_label(
+            self,
+            dim: int = -1
+    ) -> Tuple[int, torch.Size]:
+        if dim < 0:
+            return self.trans_labels.size()
+        return self.trans_labels.size(dim)
+    
+    def label_with(
+            self,
+            predictor: Any
+    ) -> Self:
+        return MultiLabeledDataset(
+            data=self.data,
+            predictor=predictor
+        )
+    
+    def random_subset(
+            self,
+            subset_size: int,
+            random_state: int = None
+    ) -> Self:
+        if random_state is not None:
+            data_perm = self.data[
+                torch.randperm(
+                    self.data.size(0), 
+                    generator=torch.Generator().manual_seed(random_state)
+                )
+            ]
+        else:
+            data_perm = self.data[torch.randperm(data.size(0))]
+        return MultiLabeledDataset(
+            data=data_perm[:min(subset_size, data_perm.size(0))],
+            predictor=self.predictor
+        )
+    
+    def label_to_errors(
+            self,
+            predictor: Any
+    ) -> None:
         """
         Map the labels according to the given predictor.
         """
-        if self.predictor and hasattr(self.predictor, 'errors'):
-            self.trans_labels = self.predictor.errors(
+        self.predictor = predictor
+        if predictor and hasattr(predictor, 'errors'):
+            self.trans_labels = predictor.errors(
                 X=self.data[:, 1:],     # [data_batch_size, dim_sample]
                 y=self.data[:, 0]       # [data_batch_size]
-            ).t()                       # [data_batch_size, cluster_size]
+            ).t()                       # [data_batch_size, num predictors]
         else:
             self.trans_labels = self.data[:, 0].bool()
-    
-    def set_predictor(
+
+    def subset(
             self,
-            predictor: Any
-    ):
-        self.predictor = predictor
-        self.label_map()
+            ids: torch.Tensor = None
+    ) -> Self:
+        if ids is None:
+            return self
+        return MultiLabeledDataset(
+            data=self.data[ids],
+            predictor=self.predictor
+        )
 
 class FixedIterationLoader:
-    def __init__(self, dataloader, max_iterations):
+    def __init__(
+            self, 
+            dataloader: DataLoader, 
+            max_iterations: int
+        ):
         self.dataloader = dataloader
         self.max_iterations = max_iterations
 

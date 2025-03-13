@@ -6,7 +6,7 @@ import torch
 import pandas as pd
 from tqdm import tqdm
 from tabulate import tabulate
-from .experiments.experiment_ccsc import ExperimentCCSC
+from .models.conditional_learner import ConditionalLinearClassifierLearner
 
 def main(data_name: str):
 
@@ -45,7 +45,7 @@ def main(data_name: str):
     for eid in tqdm(range(num_experiment),desc=" ".join([header, "running experiments"])):
     # for eid in range(num_experiment):
         # Initialize the experiment
-        experiment = ExperimentCCSC(
+        conditional_learner = ConditionalLinearClassifierLearner(
             prev_header=header + ">",
             experiment_id=eid, 
             config_file_path=config_file_path,
@@ -53,17 +53,17 @@ def main(data_name: str):
         )
 
         # Run the experiment
-        res = experiment(
+        res, _ = conditional_learner(
             data_train,
             data_test
         )
 
         # Record the result error measures
-        sparse_errs.append(res[0][1])
-        cond_errs_wo.append(res[1][1])
-        cond_errs.append(res[2][1][0]) 
-        coverages.append(res[2][1][1])
-        cond_svm_errs.append(res[3][1][0])
+        sparse_errs.append(res[0])
+        cond_errs_wo.append(res[1])
+        cond_errs.append(res[2]) 
+        coverages.append(res[3])
+        cond_svm_errs.append(res[4])
 
         print(f"{header} printing error statistics ...")
         # Print the results in a table format

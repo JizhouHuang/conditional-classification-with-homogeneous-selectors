@@ -1,8 +1,13 @@
-from typing import Union, List, Tuple, Any, Callable
+from typing import Union, Tuple, Any, Self
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
+from torch.utils.data import Dataset, Subset
 from sklearn.metrics import accuracy_score
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
+from .data import MultiLabeledDataset
+import xgboost as xgb
 
 MIN_BOOL_ERROR = 0.1
 
@@ -12,7 +17,8 @@ class LinearModel(nn.Module):
             weights: Union[torch.Tensor, torch.sparse.FloatTensor]  # Float [N1, N2, ..., N(k - 1), d]
     ):
         super(LinearModel, self).__init__()
-        self.weights: torch.Tensor = weights
+        
+        self.weights = weights.clone()
         self.device: torch.device = weights.device
 
     def forward(
@@ -23,24 +29,70 @@ class LinearModel(nn.Module):
             return torch.sparse.mm(self.weights, X.t())
         else:
             return torch.matmul(self.weights, X.t())
+        
+    def pointwise_forward(
+            self,
+            X: torch.Tensor     # Float     [Ni, ..., N(k - 1), d]
+    ) -> torch.Tensor:          # Float     [N1, N2, ..., N(k - 1)]
+        return (self.weights * X).sum(-1)
     
     def size(
             self,
-            dim: int = 0
+            dim: int = -1
     ) -> torch.Tensor:
-        return self.weights.size(dim)
+        if dim >= 0:
+            return self.weights.size(dim)
+        else:
+            return self.weights.size()
+        
+    def to_dense(
+            self,
+    ) -> Self:
+        if self.weights.is_sparse:
+            return LinearModel(weights=self.weights.to_dense())
+        return self
+    
+    def reduce(
+            self,
+            ids: torch.Tensor,  # [N]
+            dim: int = 0
+    ) -> Self:
+        if self.weights.is_sparse:
+            weights = self.weights.to_dense()
+        else:
+            weights = self.weights.clone()
+        if dim == 1:
+            weights = weights[
+                torch.arange(weights.size(0)),
+                ids
+            ]
+        elif dim == 0:
+            weights = weights[ids]
+        else:
+            print(f"Reducing LinearModel dimensions can only be applied on the first two dimensions, but the input dimension is: {dim}")
+
+        return LinearModel(weights=weights)
     
     def __getitem__(
             self,
             idx: int
-    ):
-        return self.weights[idx]
+    ) -> Self:
+        if self.weights.is_sparse:
+            return LinearModel(weights=self.weights.to_dense()[idx])
+        else:
+            return LinearModel(weights=self.weights[idx])
     
     def predict(
             self,
             X: torch.Tensor     # Float     [m, d]
     ) -> torch.Tensor:          # Boolean   [N1, N2, ..., N(k - 1), m]
         return self.forward(X=X) >= 0
+    
+    def pointwise_predict(
+            self,
+            X: torch.Tensor     # Float     [Ni, ..., N(k - 1), d]
+    ) -> torch.Tensor:          # Boolean   [N1, N2, ..., N(k - 1)]
+        return self.pointwise_forward(X=X) >= 0
     
     def prediction_rate(
             self,
@@ -50,37 +102,44 @@ class LinearModel(nn.Module):
     
     def agreements(
             self,
+            y: torch.Tensor,                    # Boolean   [Ni, ..., N(k - 1), m]
             X: torch.Tensor,                    # Float     [m, d]
-            y: torch.Tensor                     # Boolean   [Ni, ..., N(k - 1), m]
     ) -> torch.Tensor:                          # Boolean   [N1, ..., Ni, ..., N(k - 1), m]
-        return self.predict(X=X) == y.bool()    # [N1, ..., Ni, ..., N(k - 1), m] * [Ni, ..., N(k - 1), m]
+        return self.predict(X=X) == y.bool()    # [N1, ..., Ni, ..., N(k - 1), m], [Ni, ..., N(k - 1), m]
     
     def accuracy(
             self,
+            y: torch.Tensor,    # Boolean   [Ni, ..., N(k - 1), m]
             X: torch.Tensor,    # Float     [m, d]
-            y: torch.Tensor     # Boolean   [Ni, ..., N(k - 1), m]
     ) -> torch.Tensor:          # Boolean   [N1, ..., Ni, ..., N(k - 1)]
         return self.agreements(
-            X=X,
-            y=y
-        ).sum(dim=-1) / X.size(0)
+            y=y,
+            X=X
+        ).sum(dim=-1) / y.size(-1)
     
     def errors(
             self,
+            y: torch.Tensor,                    # Boolean   [Ni, ..., N(k - 1), m]
             X: torch.Tensor,                    # Float     [m, d]
-            y: torch.Tensor                     # Boolean   [Ni, ..., N(k - 1), m]
     ) -> torch.Tensor:                          # Boolean   [N1, ..., Ni, ..., N(k - 1), m]
-        return self.predict(X=X) != y.bool()    # [N1, ..., Ni, ..., N(k - 1), m] * [Ni, ..., N(k - 1), m]
+        return self.predict(X=X) != y.bool()    # [N1, ..., Ni, ..., N(k - 1), m], [Ni, ..., N(k - 1), m]
+    
+    def pointwise_errors(
+            self,
+            y: torch.Tensor,                    # Boolean   [Ni, ..., N(k - 1)]
+            X: torch.Tensor,                    # Float     [Ni, ..., N(k - 1), d]
+    ) -> torch.Tensor:                          # Boolean   [N1, ..., Ni, ..., N(k - 1)]
+        return self.pointwise_predict(X=X) != y.bool()
     
     def error_rate(
             self,
+            y: torch.Tensor,    # Boolean   [Ni, ..., N(k - 1), m]
             X: torch.Tensor,    # Float     [m, d]
-            y: torch.Tensor     # Boolean   [Ni, ..., N(k - 1), m]
     ) -> torch.Tensor:          # Float     [N1, ..., Ni, ..., N(k - 1)]
         return self.errors(
-            X=X,
-            y=y
-        ).sum(dim=-1) / X.size(0)
+            y=y,
+            X=X
+        ).sum(dim=-1) / y.size(-1)
     
     def update(
             self,
@@ -93,21 +152,21 @@ class LinearModel(nn.Module):
             dim=-1
         ).unsqueeze(-1)                 # [N1, N2, ..., N(k - 1), 1]
 
-    def proj_weights_to(
+    def project_onto(
             self,
-            ids: torch.Tensor,  # Boolean [N1, N2, ..., N(k - 1)]
-            X: torch.Tensor     # [N2, ..., N(k - 1), d]
+            X: torch.Tensor     # Float     [N(k - 1), d]
     ) -> None:
+        # <w, x> in batch
+        proj_coeffs = self.pointwise_forward(X=X)    # [N1, N2, ..., N(k - 1)]
+
+        # indices of weights that is out of the designated halfspace
+        ids = proj_coeffs < 0
+
+        # update: w = w - <w, x>x in batch
         if ids.any():
-            X_rep = X.unsqueeze(0).expand(self.weights.shape[0], *X.shape[:]) # [N1, N2, ..., N(k - 1), d]
+            self.weights[ids] = self.weights[ids] - proj_coeffs[ids].unsqueeze(-1) * X[ids]
 
-            # <w, X>
-            w_proj = (self.weights[ids] * X_rep[ids]).sum(-1).unsqueeze(-1)  # [..., 1]
-
-            # w - <w, X>X^T
-            self.weights[ids] -= w_proj * X_rep[ids]
-
-    def proj_data(
+    def projection_of(
             self,
             X: torch.Tensor     # Float     [m, d]
     ) -> torch.Tensor:          # Float     [N1, N2, ..., N(k - 1), m, d]
@@ -117,73 +176,63 @@ class LinearModel(nn.Module):
             self.weights.unsqueeze(-2)      # [N1, N2, ..., N(k - 1), 1, d]
         )      # [N1, N2, ..., N(k - 1), m, d]
     
-    def proj_grad(
+    def projected_gradient(
             self,
+            y: torch.Tensor,    # Boolean   [Ni, ..., N(k - 1), m]
             X: torch.Tensor,    # Float     [m, d]
-            y: torch.Tensor     # Boolean   [Ni, ..., N(k - 1), m]
     ) -> torch.Tensor:          # Float     [N1, N2, ..., N(k - 1), d]                                                                                   
         return torch.mean(
             self.agreements(
-                X=X,
-                y=y
-            ).unsqueeze(-1) * self.proj_data(X=X),       # [N1, N2, ..., N(k - 1), m, d]
+                y=y,
+                X=X
+            ).unsqueeze(-1) * self.projection_of(X=X),       # [N1, N2, ..., N(k - 1), m, d]
             dim=-2
         )
     
-class ConditionalLinearModel(nn.Module):
+    def conditional_one_rate(
+            self,
+            y: torch.Tensor,    # Boolean   [Ni, ..., N(k - 1), m]
+            X: torch.Tensor,    # Float     [m, d]
+    ) -> torch.Tensor:          # Float     [N1, N2, ..., N(k - 1)]
+        y_sel = y * self.predict(X=X)     # [N1, N2, ..., N(k - 1), m]
+        return y_sel.sum(dim=-1) / self.predict(X=X).sum(dim=-1)
     
-    def __init__(
+    def conditional_zero_rate(
             self,
-            seletor_weights: torch.Tensor = None,
-            predictor: Any = None,
-            device: torch.device = torch.device('cpu')
-    ):
-        super(ConditionalLinearModel, self).__init__()
-
-        self.selector: LinearModel = None
-        self.predictor: Any = predictor
-        self.device = device
-
-        self.set_selector(weights=seletor_weights)
-        self.set_predictor(predictor=predictor)
-
-    def set_selector(
+            y: torch.Tensor,    # Boolean   [Ni, ..., N(k - 1), m]
+            X: torch.Tensor,    # Float     [m, d]
+    ) -> torch.Tensor:          # Float     [N1, N2, ..., N(k - 1)]
+        return 1 - self.conditional_accuracy(
+            y=y,
+            X=X
+        )
+    
+    def model_selection_by_one(
             self,
-            weights: torch.Tensor       # [N1, N2, ..., N(k - 1), d]
+            dim: int,
+            dataset: Union[MultiLabeledDataset, Subset]
+    ) -> Tuple[torch.Tensor, torch.Tensor, Self]:
+        labels, features = dataset[:]                  
+        min_vals, min_ids = torch.min(
+            self.conditional_one_rate(
+                y=labels.t(),
+                X=features
+            ),              # [N1, ..., N(k - 1)]
+            dim=dim
+        )                   # [N1, ..., N(k - 2)], [N1, ..., N(k - 2)]
+
+        return min_vals, min_ids, self.reduce(
+            ids=min_ids,
+            dim=dim
+        )
+    
+    def partial_update(
+            self,
+            ids: torch.Tensor,  # Boolean
+            model: Self
     ) -> None:
-        if weights is not None and isinstance(weights, torch.Tensor):
-            self.selector = LinearModel(weights=weights)
-
-    def set_predictor(
-            self,
-            predictor: Any
-    ) -> None:
-        if predictor and hasattr(predictor, "errors"):
-            self.predictor = predictor
-
-    def select_data(
-            self,
-            X: torch.Tensor,
-            y: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        selections = self.selector.predict(X=X)
-        return y[selections], X[selections]
-
-    def conditional_error_rate(
-            self,
-            X: torch.Tensor,                                # [m, d]
-            y: torch.Tensor                                 # [N1, N2, ..., N(k - 1), m]
-    ) -> torch.Tensor:                                      # [N1, N2, ..., N(k - 1)]
-        selections = X
-        if self.selector:
-            selections = self.selector.predict(X=X)         # [N1, N2, ..., N(k - 1), m]
-        errors = y                                          # [N1, N2, ..., N(k - 1), m]
-        if self.predictor:
-            errors = self.predictor.errors(X=X, y=y)        # [N1, N2, ..., N(k - 1), m]
-        sel_errors = selections * errors                    # [N1, N2, ..., N(k - 1), m]
-        cond_err_rate = sel_errors.sum(dim=-1) / selections.sum(dim=-1)
-        cond_err_rate[torch.isnan(cond_err_rate)] = 1
-        return cond_err_rate
+        self.weights[ids] = model.weights[ids]
+    
     
 class PredictiveModel(nn.Module):
     def __init__(
@@ -199,9 +248,9 @@ class PredictiveModel(nn.Module):
     
     def train(
             self,
-            data: Tuple[torch.Tensor]
+            y: torch.Tensor,
+            X: torch.Tensor
     ) -> None:
-        y, X = data
         if hasattr(self.model, "fit"):
             cutoff = min(y.size(0), self.max_data_train)
             self.model.fit(
@@ -223,14 +272,56 @@ class PredictiveModel(nn.Module):
     
     def errors(
             self,
-            X: torch.Tensor,
-            y: torch.Tensor
+            y: torch.Tensor,
+            X: torch.Tensor
     ) -> torch.Tensor:
         return self.predict(X=X) != y.bool()
     
     def error_rate(
             self,
-            X: torch.Tensor,
-            y: torch.Tensor
+            y: torch.Tensor,
+            X: torch.Tensor
     ) -> torch.Tensor:
         return self.errors(X=X, y=y).sum() / X.size(0)
+    
+
+class LogisticRegLearner(PredictiveModel):
+    def __init__(
+            self,
+            max_data_train: int = 50000,
+            device: torch.device = torch.device('cpu')
+        ):
+
+        # Initialize the logistic regression model
+        super().__init__(LogisticRegression(max_iter=2000), max_data_train, device)
+
+class SVMLearner(PredictiveModel):
+    def __init__(
+            self,
+            max_data_train: int = 50000, 
+            device: torch.device = torch.device('cpu')
+    ):
+
+        super().__init__(
+            model=SVC(C=100000, kernel='linear'), 
+            max_data_train=max_data_train, 
+            device=device
+        )
+
+class RandomForestLearner(PredictiveModel):
+    def __init__(
+            self,
+            max_data_train: int = 50000, 
+            device: torch.device = torch.device('cpu')
+    ):
+        
+        super().__init__(RandomForestClassifier(n_estimators=100), max_data_train, device)
+
+class XGBoostLearner(PredictiveModel):
+    def __init__(
+            self,
+            max_data_train: int = 50000, 
+            device: torch.device = torch.device('cpu')
+    ):
+
+        super().__init__(xgb.XGBClassifier(), max_data_train, device)

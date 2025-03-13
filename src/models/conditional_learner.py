@@ -1,158 +1,396 @@
 import torch
 import torch.nn as nn
-from torch.utils.data import random_split
+import itertools
+import yaml
+import math
+from typing import Union, Tuple, Iterable, Any
 from tqdm import tqdm
-from typing import List, Tuple
-from ..utils.data import TransformedDataset
-from ..utils.simple_models import LinearModel, ConditionalLinearModel
-from .projected_sgd import SelectorPerceptron
+from tabulate import tabulate
+from torch.utils.data import random_split
+from ..utils.data import MultiLabeledDataset
+from .predictor_learner import RobustSparseHalfspaceLearner
+from .selector_learner import SelectiveHalfspaceLearner
+from ..utils.simple_models import LinearModel, SVMLearner
 
-class ConditionalLearnerForFiniteClass(nn.Module):
+class ConditionalLinearClassifierLearner(nn.Module):
     """
-    Conditional Classification for Any Finite Classes
+    Personalized predictor.
     """
     def __init__(
-            self, 
+            self,
             prev_header: str,
-            dim_sample: int,
-            num_iter: int, 
-            sample_size_psgd: int,
-            lr_coeff: float = 0.5,
-            batch_size: int = 32,
-            device: torch.device = torch.device('cpu')
+            experiment_id: int,
+            config_file_path: str,
+            device: torch.device
     ):
         """
-        Initialize the conditional learner for finite class classification.
-        Compute the learning rate of PSGD for the given lr coefficient using
-        the formula:
-            beta = O(sqrt(1/num_iter * dim_sample)).
+        Initialize through reading parameters from YAML file located under src/config/.
 
         Parameters:
-        dim_sample (int):             The dimension of the sample features.
-        num_iter (int):               The number of iterations for SGD.
-        lr_coeff (float):             The learning rate coefficient.
-        sample_size_psgd (float):          The ratio of training samples.
-        batch_size (int):             The batch size for SGD.
+        experiment_id (int): The ID of the experiment.
+        config_file_path (str): The path to the configuration file.
+
+        Explanations:
+        num_sample_rll:     Number of training data used for Robust List Learning.
+        margin:             According to Appendix A, the RHS of the linear system is formed by labels subtracted by the margin.
+        sparsity:           Number of non-zero dimensions for the resulting sparse representations.
+        sample_complexity:  To speed up the computation, instead of iterating only one classifier at a time, we partition 
+                            all the sparse classifiers into multiple clusters and run PSGD on a cluster in each iteration.
+        data_frac_psgd:     Fraction of training data used for the updating stage of Projected SGD.
+        lr_coeff:           A constant to scale the learning rate (beta) of PSGD.
+        num_iter:           The number of iteration for PSGD to run.
+        batch_size:         Number of example to estimate the expectation of projected gradient in each gradient step.
         """
-        super(ConditionalLearnerForFiniteClass, self).__init__()
-        self.header = " ".join([prev_header, "conditional learner", "-"])
-        self.dim_sample = dim_sample
-        self.num_iter = num_iter
-        self.batch_size = batch_size
-        self.sample_size_psgd = sample_size_psgd
+        super(ConditionalLinearClassifierLearner, self).__init__()
+        self.header = " ".join([prev_header, "experiment", str(experiment_id), "-"])
         self.device = device
 
-        self.lr_beta = lr_coeff * torch.sqrt(
-            torch.tensor(
-                1 / (num_iter * dim_sample)
-            )
+        # Read the YAML configuration file
+        with open(config_file_path, 'r') as file:
+            config = yaml.safe_load(file)
+        
+        # Load configuration values
+        # self.data_frac = config['data_frac']
+        self.num_sample_rll = config['num_sample_rll']
+        self.margin = config['margin']
+        self.sparsity = config['sparsity']
+        self.sample_complexity = config['sample_complexity']
+        self.train_subset_fracs = config['train_subset_fracs']
+        self.lr = config['lr']
+        self.num_iter = config['num_iter']
+        self.batch_size = config['batch_size']
+        self.eid = experiment_id
+
+        print(" ".join([self.header, "initializing learners ..."]))
+
+        self.predictor_learner = RobustSparseHalfspaceLearner(
+            prev_header=self.header + ">",
+            sparsity=self.sparsity, 
+            margin=self.margin,
+            device=self.device
         )
-        self.init_weight = torch.randn(
-            self.dim_sample,
-            generator=torch.Generator().manual_seed(42)
-        ).to(device)
-        self.init_weight = self.init_weight / torch.norm(self.init_weight, p=2)
+
+        self.selector_learner = SelectiveHalfspaceLearner(
+            prev_header=self.header + ">",
+            subset_fracs=self.train_subset_fracs, 
+            num_iter=self.num_iter, 
+            lr=self.lr,
+            batch_size=self.batch_size,
+            device=self.device
+        )
 
     def forward(
-            self, 
-            dataset: TransformedDataset,
-            classifier_clusters: List[ConditionalLinearModel]
-    ) -> ConditionalLinearModel:
+            self,
+            data_train: torch.Tensor,
+            data_test: torch.Tensor
+    ) -> Tuple[torch.Tensor, LinearModel]:
         """
-        Call PSGD optimizer for each cluster of sparse classifiers using all the data given.
-        
-        Note that the PSGD optimizer runs in parallel for all the sparse classifiers in a 
-        cluster. PSGD optimizer will return one selector for each sparse classifier of each 
-        cluster.
-
-        For each cluster, we evaluate the best classifier-selector pair using all the data given
-        due to insufficient data size.
-
-        At last, we use the same data set to find the best classifier-selector pair across cluster.
+        Call Robust List Learner to generate a list of sparse classifiers and input them to the Conditional Learner.
 
         Parameters:
-        classifier_clusters (List[ConditionalLinearModel]): The list of sparse classifiers.
+        data_train:     Training data for both Robust List Learning and Conditional Learning.
+        data_test:      Testing data to estimate the error measures of the final classifier-selector pair.
+                        Disjoint from data_train.
+        """
 
-        Returns:
-        selector_list (torch.Tensor): The list of weights for each classifier.
-                                      The weight_list is represented as a sparse tensor.
-                                      The order of the weight vectors in the list is the same as the following two loops:
-                                      for features in feature_combinations:
-                                          for samples in sample_combinations:
-                                              ...
-        """        
-        
-        candidate_selectors = torch.zeros(
-            [len(classifier_clusters), self.dim_sample]
-        ).to(self.device)
-        candidate_classifiers = torch.zeros(
-            [len(classifier_clusters), self.dim_sample]
-        ).to(self.device)
+        dataset_train = MultiLabeledDataset(data=data_train)
+        # learn without observations
+        sparse_lm, cond_ers, predictors, selectors = self.subroutine(
+            dataset=dataset_train,
+            predictor_learner=self.predictor_learner,
+            selector_learner=self.selector_learner,
+            observations=self.random_weight(
+                length=dataset_train.num_features()
+            ),
+            desc=f"{self.header} (initial) learning predictor-selector pair"
+        )
+        predictor: LinearModel = predictors[torch.argmin(cond_ers)]
+        selector: LinearModel = selectors[torch.argmin(cond_ers)]
 
-        # initialize evaluation dataset for conditional learner
-        labels_eval, features_eval = dataset[:]
-
-        # initialze train dataset for PSGD
-        dataset_train, dataset_val = random_split(
-            dataset, 
-            [self.sample_size_psgd, len(dataset) - self.sample_size_psgd],
-            # generator=torch.Generator().manual_seed(42)
+        test_stats: torch.Tensor = self.oos_statistics(
+            dataset=MultiLabeledDataset(data=data_test),
+            sparse_predictor=sparse_lm,
+            predictor=predictor,
+            selector=selector,
+            on_selector_model=self.on_selector_svm(
+                selector=selector,
+                dataset=dataset_train
+            )
         )
 
-        for i, classifiers in enumerate(
-            tqdm(
-                classifier_clusters, 
-                desc=f"{self.header} learning selectors",
-                # leave=False
-            )
-        ):
-        # for i, classifiers in enumerate(classifier_clusters):
-            dataset.set_predictor(
-                predictor=classifiers.predictor
-            )
+        # Print the results in a table format
+        table = [
+            ["Classifier Type", "Train Size", "Test Size", "Sample Dim", "Sparsity", "PSGD Iter", "LR Coeff", "Est ER", "Coverage"],
+            ["Classic Sparse", data_train.size(0), data_test.shape[0], data_test.shape[1] - 1, self.sparsity, self.num_iter, self.lr, test_stats[0], 1],
+            ["Cond Sparse w/o Selector", data_train.size(0), data_test.shape[0], data_test.shape[1] - 1, self.sparsity, self.num_iter, self.lr, test_stats[1], 1],
+            ["Cond Sparse", data_train.size(0), data_test.shape[0], data_test.shape[1] - 1, self.sparsity, self.num_iter, self.lr, test_stats[2], test_stats[3]],
+            ["Cond SVM", data_train.size(0), data_test.shape[0], data_test.shape[1] - 1, self.sparsity, self.num_iter, self.lr, test_stats[4], test_stats[3]]
+        ]
+        print(tabulate(table, headers="firstrow", tablefmt="grid"))
 
-            selector_learner = SelectorPerceptron(
-                prev_header=self.header + ">",
-                dim_sample=self.dim_sample,
-                cluster_id = i + 1,
-                cluster_size=classifiers.predictor.size(0),
-                num_iter=self.num_iter,
-                lr_beta=self.lr_beta,
-                batch_size=self.batch_size,
-                device=self.device
+        return test_stats, sparse_lm
+    
+    def on_selector_svm(
+            self,
+            selector: LinearModel,
+            dataset: MultiLabeledDataset
+    ) -> SVMLearner:
+        # selector training data
+        dataset_train = dataset.subset(
+            ids=selector.predict(
+                X=dataset.features()
             )
-
-            selectors = selector_learner(
-                dataset_train=dataset_train,
-                dataset_val=dataset_val,
-                init_weight=self.init_weight.to(self.device)
-            )  # [cluster size, dim sample]
-
-            classifiers.set_selector(weights=selectors)
-            _, min_ids = torch.min(
-                classifiers.conditional_error_rate(
-                    X=features_eval,
-                    y=labels_eval
-                ),
-                dim=0
-            )
-            candidate_classifiers[i, ...], candidate_selectors[i, ...] = classifiers.predictor[min_ids].to_dense(), selectors[min_ids]
-            classifiers.set_selector(weights=None)
-
-        classifiers = ConditionalLinearModel(
-            seletor_weights=candidate_selectors,
-            predictor=LinearModel(weights=candidate_classifiers),
+        )
+        svm = SVMLearner(
             device=self.device
         )
-        _, min_ids = torch.min(
-            classifiers.conditional_error_rate(
-                X=features_eval,
-                y=labels_eval
-            ),
+        svm.train(
+            *dataset_train.decouple()
+        )
+        return svm
+    
+    def subroutine(
+            self,
+            dataset: MultiLabeledDataset,
+            predictor_learner: RobustSparseHalfspaceLearner,
+            selector_learner: SelectiveHalfspaceLearner,
+            observations: torch.Tensor,
+            desc: str = None
+    ) -> Tuple[LinearModel, torch.Tensor, LinearModel, LinearModel]:
+        
+        # split dataset for training and model selections for standalone sparse predictors
+        ds_train_pred, ds_sel_pred = random_split(
+            dataset,
+            [self.num_sample_rll, len(dataset) - self.num_sample_rll],
+            generator=torch.Generator().manual_seed(42)
+        )
+
+        # initialize current best
+        sparse_er, sparse_lm = 1, None
+        min_cond_er = torch.ones(observations.size(0), device=self.device)
+        min_predictors = LinearModel(weights=torch.randn_like(observations, device=self.device))
+        min_selectors = LinearModel(weights=observations.clone())
+
+        # we split the sparsity into two part, and iterate the combinations generated by the first part
+        # while parallely compute the combinations generated by the other part
+        for sample_indices, feature_indices in self.prefix_combination_generator(
+            num_sample=self.num_sample_rll,
+            num_feature=dataset.num_features(),
+            num_observation=observations.size(0),
+            desc=desc
+        ):
+            print(f"{self.header} selected sample indices {sample_indices}, selected feature indices {feature_indices}")
+            # learning sparse predictors
+            predictors: LinearModel = predictor_learner(
+                ds_train_pred, 
+                sample_indices, 
+                feature_indices
+            )
+
+            # print(f"{self.header} sparse predictor size: {predictors.size()}")
+
+            # model selection for sparse classifiers based on regular classification error
+            sparse_er, sparse_lm = self.model_selection(
+                error_rates=predictors.error_rate(*ds_sel_pred[:]),
+                predictors=predictors,
+                prev_predictor=sparse_lm,
+                prev_er=sparse_er
+            )
+
+            # learn reference class with label mapping
+            eval_cond_errors, eval_ids, selectors = selector_learner(
+                dataset.label_with(predictors), 
+                observations
+            )   # Tuple[torch.Tensor, torch.Tensor, LinearModel]
+
+            # print(f"{self.header} learned selectors (after selecting) size: {selectors.size()}")
+            
+            # selecting corresponding predictors
+            predictors: LinearModel = predictors.reduce(eval_ids)
+
+            # update current best
+            ids = eval_cond_errors < min_cond_er
+            min_cond_er[ids] = min_cond_er[ids]
+            min_predictors.partial_update(
+                ids=ids,
+                model=predictors
+            )
+            min_selectors.partial_update(
+                ids=ids,
+                model=selectors
+            )
+
+        print(f"{self.header} result predictor size: {min_predictors.size()}, is sparse? {min_predictors.weights.is_sparse}")
+        print(f"{self.header} reuslt selector size: {min_selectors.size()}, is sparse? {min_selectors.weights.is_sparse}")
+        print(f"{self.header} sparse predictors size {min_predictors.size()}")
+
+        return sparse_lm, min_cond_er, min_predictors, min_selectors
+
+    def model_selection(
+            self,
+            error_rates: torch.Tensor,
+            predictors: LinearModel,
+            prev_predictor: LinearModel,
+            prev_er: float
+    ) -> Tuple[float, LinearModel]:
+        min_er, min_id = torch.min(
+            error_rates,
             dim=0
         )
-        return ConditionalLinearModel(
-            seletor_weights=candidate_selectors[min_ids],
-            predictor=LinearModel(weights=candidate_classifiers[min_ids]),
+        if min_er < prev_er:
+            return min_er, predictors[min_id]
+        return prev_er, prev_predictor
+        
+    def oos_statistics(
+            self,
+            dataset: MultiLabeledDataset,
+            sparse_predictor: LinearModel,
+            predictor: LinearModel,
+            selector: LinearModel,
+            on_selector_model: SVMLearner = None
+    ) -> torch.Tensor:
+        
+        error = sparse_predictor.error_rate(
+            *dataset.decouple()
+        )
+        # Estimate error measures with selectors
+        error_wo = predictor.error_rate(
+            *dataset.decouple()
+        )
+
+        # map the labels in test data according to the selected predictor
+        cond_error = selector.conditional_one_rate(
+            *dataset.label_with(predictor).decouple()
+        )     
+
+        if on_selector_model is not None:
+            svm_er = on_selector_model.error_rate(
+                *dataset.subset(
+                    ids=selector.predict(
+                        X=dataset.features()
+                    )
+                ).decouple()
+            )
+        else:
+            svm_er = 1
+
+        coverage = selector.prediction_rate(X=dataset.features())
+
+        return torch.tensor(
+            [
+                error,
+                error_wo,
+                cond_error,
+                coverage,
+                svm_er
+            ]
+        )
+
+    def prefix_combination_generator(
+            self,
+            num_sample: int,
+            num_feature: int,
+            num_observation: int,
+            desc: str = None
+    ) -> Iterable:
+        '''
+        Search for the lengths of sample and feature indices prefix such that, when conditioning on these prefix 
+        indices, the number of combinations of the remaining indices is the closest to sample complexity
+        
+        Returns:
+        gen: Iterable           A range-like generator that yields a pair of sample and feature indices based on
+                                the closest prefix lengths. If desc is given, then we return a tqdm wrapped iterable.
+        '''
+        
+        closest_num_sample_prefix = 0
+        closest_num_feature_prefix = 0
+        closest_num = 0
+
+        for num_sp in range(min(self.sparsity, num_sample)):
+            for num_fp in range(min(self.sparsity, num_feature)):
+                num_sample_comb = math.comb(
+                    num_sample,
+                    self.sparsity - num_sp
+                )
+                num_feature_comb = math.comb(
+                    num_feature,
+                    self.sparsity - num_fp
+                )
+                total = num_sample_comb * num_feature_comb * num_observation
+                
+                if closest_num < total * num_feature <= self.sample_complexity:
+                    closest_num_sample_prefix = num_sp
+                    closest_num_feature_prefix = num_fp
+                    closest_num = total * num_feature
+
+        gen = self.two_level_combination_generator(
+            num_sample=num_sample,
+            deg_sample=closest_num_sample_prefix,
+            num_feature=num_feature,
+            deg_feature=closest_num_feature_prefix
+        )
+        if desc is not None:
+            num_sp_comb = math.comb(num_sample, closest_num_sample_prefix)
+            num_fp_comb = math.comb(num_feature, closest_num_feature_prefix)
+            return tqdm(
+                iterable=gen,
+                total=num_sp_comb * num_fp_comb,
+                desc=desc
+            )
+        return gen
+    
+    def two_level_combination_generator(
+            self,
+            num_sample: int,
+            deg_sample: int,
+            num_feature: int,
+            deg_feature: int
+    ) -> Iterable:
+        for sample_comb in itertools.combinations(
+            torch.arange(num_sample).tolist(), 
+            deg_sample
+        ):
+            for feature_comb in itertools.combinations(
+                torch.arange(num_feature).tolist(),
+                deg_feature
+            ):
+                yield (
+                    torch.tensor(sample_comb, device=self.device),
+                    torch.tensor(feature_comb, device=self.device)
+                )
+        
+    def normalize(
+            self, 
+            X: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Normalize the input tensor X.
+        
+        Parameters:
+        X (torch.Tensor): The input tensor to be normalized.
+                          [m, d]
+        
+        Returns:
+        X_normalized (torch.Tensor): The normalized tensor.
+        """
+        return X / torch.norm(X, p=2, dim=-1, keepdim=True)
+
+    def random_weight(
+            self,
+            length: int
+        ) -> torch.Tensor:
+        """
+        Generate two opposite observations on a random direction.
+        
+        Returns:
+        observation (torch.Tensor): The random observation.
+                                    [dim_sample]
+        """
+        X = torch.randn(
+            length, 
             device=self.device
         )
+        X = torch.stack(
+            [X, -X]
+        )
+        return self.normalize(X)
