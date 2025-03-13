@@ -3,10 +3,10 @@
 #BSUB -u huang.jizhou@wustl.edu
 #BSUB -R 'select[type==any]'
 #BSUB -q gpu-compute
-#BSUB -gpu "num=1:mode=exclusive_process:gmodel=NVIDIAA40"
+#BSUB -gpu "num=1:mode=exclusive_process:gmodel=NVIDIAA10080GB"
 #BSUB -a 'docker(hliucola/gracker)' /bin/true
 #BSUB -N
 #BSUB -W 100:00
 #BSUB -J cc_haberman
 #source ...
-python -m src.main --data_name haberman
+python -m src.main --data_name haberman --num_exp 100
