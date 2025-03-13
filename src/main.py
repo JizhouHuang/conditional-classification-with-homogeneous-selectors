@@ -76,11 +76,11 @@ def main(data_name: str):
         ]
         print(tabulate(table, headers="firstrow", tablefmt="grid"))
     
-        data_store = [sparse_errs, cond_errs_wo, cond_errs, cond_svm_errs, coverages]
-        rows = ["Classic Sparse ER", "Cond Sparse ER w/o Selector", "Cond Sparse ER", "Cond SVM ER", "Coverage"]
-        df = pd.DataFrame(data_store, index=rows)
-        # df.to_csv("src/log/raw_" + data_name + ".csv", index=True)
-        df.to_csv("src/log/raw_" + data_name + "_3" + ".csv", index=True)
+        # data_store = [sparse_errs, cond_errs_wo, cond_errs, cond_svm_errs, coverages]
+        # rows = ["Classic Sparse ER", "Cond Sparse ER w/o Selector", "Cond Sparse ER", "Cond SVM ER", "Coverage"]
+        # df = pd.DataFrame(data_store, index=rows)
+        # # df.to_csv("src/log/raw_" + data_name + ".csv", index=True)
+        # df.to_csv("src/log/raw_" + data_name + "_3" + ".csv", index=True)
         
 
     

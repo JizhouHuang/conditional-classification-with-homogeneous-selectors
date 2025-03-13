@@ -1,6 +1,0 @@
-,0
-Classic Sparse ER,tensor(0.2891)
-Cond Sparse ER w/o Selector,tensor(0.2734)
-Cond Sparse ER,tensor(0.1517)
-Cond SVM ER,tensor(0.1517)
-Coverage,tensor(0.5664)

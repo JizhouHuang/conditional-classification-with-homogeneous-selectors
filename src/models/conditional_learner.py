@@ -162,7 +162,7 @@ class ConditionalLinearClassifierLearner(nn.Module):
         ds_train_pred, ds_sel_pred = random_split(
             dataset,
             [self.num_sample_rll, len(dataset) - self.num_sample_rll],
-            generator=torch.Generator().manual_seed(42)
+            # generator=torch.Generator().manual_seed(42)
         )
 
         # initialize current best
