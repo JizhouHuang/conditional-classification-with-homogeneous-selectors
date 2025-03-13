@@ -4,5 +4,5 @@ sparsity: 2
 sample_complexity: 4000000
 train_subset_fracs: [0.67]
 lr: 1.0
-num_iter: 1024
+num_iter: 256
 batch_size: 128

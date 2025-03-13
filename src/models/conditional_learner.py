@@ -102,11 +102,12 @@ class ConditionalLinearClassifierLearner(nn.Module):
             observations=self.random_weight(
                 length=dataset_train.num_features()
             ),
-            desc=f"{self.header} (initial) learning predictor-selector pair"
+            desc=f"{self.header} learning predictor-selector pair"
         )
         predictor: LinearModel = predictors[torch.argmin(cond_ers)]
         selector: LinearModel = selectors[torch.argmin(cond_ers)]
 
+        print(f"{self.header} learning on-selector SVM ...")
         test_stats: torch.Tensor = self.oos_statistics(
             dataset=MultiLabeledDataset(data=data_test),
             sparse_predictor=sparse_lm,
