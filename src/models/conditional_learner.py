@@ -181,7 +181,7 @@ class ConditionalLinearClassifierLearner(nn.Module):
             desc=desc
         ):
             # learning sparse predictors
-            print(f"{self.header} learning sparse predictors conditioned on sample/feature indices {sample_indices}/{feature_indices} ...")
+            # print(f"{self.header} learning sparse predictors conditioned on sample/feature indices {sample_indices}/{feature_indices} ...")
             predictors: LinearModel = predictor_learner(
                 ds_train_pred, 
                 sample_indices, 
