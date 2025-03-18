@@ -1,6 +1,6 @@
 num_sample_rll: 96
 margin: 0.0001
-sparsity: 3
+sparsity: 2
 sample_complexity: 20000000
 train_subset_fracs: [0.67]
 lr: 1.0
